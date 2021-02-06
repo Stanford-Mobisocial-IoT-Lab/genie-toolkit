@@ -21,6 +21,8 @@
 function cleanEnumValue(v) {
     // replace dash with space
     v = v.replace(/-/g, ' ');
+    // Remove apostrophe
+    v = v.replace(/'/g, '');
     // camelcase the value
     v = camelcase(v);
     // add underscore prefix if value starts with number

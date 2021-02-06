@@ -1,0 +1,131 @@
+{
+  "result": "ok",
+  "data": [
+    {
+      "type": "tt:contact",
+      "name": "Contact Identity",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:contact_name",
+      "name": "Contact Name",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:device",
+      "name": "Device Name",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:email_address",
+      "name": "Email Address",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:flow_token",
+      "name": "Flow Identifier",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:function",
+      "name": "Function Name",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:hashtag",
+      "name": "Hashtag",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:path_name",
+      "name": "Unix Path",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:phone_number",
+      "name": "Phone Number",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:picture",
+      "name": "Picture",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:program",
+      "name": "Program",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:url",
+      "name": "URL",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "tt:username",
+      "name": "Username",
+      "is_well_known": 1,
+      "has_ner_support": 0
+    },
+    {
+      "type": "org.wikidata:city",
+      "name": "City",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:human",
+      "name": "Donated By",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:occupation",
+      "name": "Occupation",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:event",
+      "name": "Participant In",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:award",
+      "name": "Nominated For",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:country",
+      "name": "Country",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:ethnic_group",
+      "name": "Ethnic Group",
+      "is_well_known": false,
+      "has_ner_support": true
+    },
+    {
+      "type": "org.wikidata:song",
+      "name": "Anthem",
+      "is_well_known": false,
+      "has_ner_support": true
+    }
+  ]
+}
