@@ -11,6 +11,9 @@ const ThingTalk = require('thingtalk');
 const Type = ThingTalk.Type;
 
 const I18N = require('../../../lib/i18n');
+const StreamObject = require('stream-json/streamers/StreamObject');
+
+const INSTANCE_OF_PROP = "P31"
 
 const {
     getItemLabel,
@@ -30,110 +33,99 @@ class ParamDatasetGenerator {
         this._output_dir = options.outputDir;
         this._maxValueLength = options.maxValueLength;
         this._tokenizer = I18N.get(options.locale).getTokenizer();
-        this._properties = {};
-        this._pathes = {};
         this._schemaorgManifest = options.schemaorgManifest;
         this._schemaorgProperties = {};
-        for (const domain of this._domains) {
-            this._properties[domain] = new Set();
-            this._pathes[domain] = new Set();
-        }
+        this._propery_pathes = [];
+        this._properties;
+        this._instances;
     }
 
     async _readSync(func, dir) {
         return util.promisify(func)(dir, { encoding: 'utf8' });
     }
 
-    async _processData(domain, domainLabel, table, outputDir, isEntity, canonical) {
-        const inputDir = path.join(this._input_dir, domain, table);
-        const inputsPath = await this. _readSync(fs.readdir, inputDir);
+    async _processData(canonical) {
+        const domainProperties = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[0]));
+        const propertyLabels = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
+        const itemLabels = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[3]));
+        const outputDir = path.join(this._output_dir, canonical, 'parameter-datasets');
+        const datasetPathes = new Set();
+        const filteredDomainProperties = [];
         
-        for (const inputPath of inputsPath) {
-            const property = inputPath.split('.')[0];
-            const label = await getPropertyLabel(property);
-            const type = await getType(domain, domainLabel, property, label, this._schemaorgProperties);
-            let fileId = `org.wikidata:${(await argnameFromLabel(label))}`;            
-            if (type) {
-                const elemType = getElementType(type);
-            
-                // If not entity or String/Location/Currency type save property and skip.
-                if (!elemType.isString && !elemType.isEntity && !elemType.isLocation && !elemType.isCurrency) {
-                    this._properties[domain].add(property);
-                    continue;
-                }
+        console.log('Processing properties');
+        for (const [property, qids] of Object.entries(domainProperties)) {
+            // Ignore list for now as later step throws error
+            if (['P2439'].indexOf(property) > -1)
+                continue;
+            const label = propertyLabels[property];
+            let type = await getType(canonical, property, label, this._schemaorgProperties);
+            let fileId = `org.wikidata:${(await argnameFromLabel(label))}`;
+            let isEntity = false;
 
-                if (elemType.isEntity) {
+            // If we can map to some type, then update the fileId
+            if (type) {
+                // Maps to entity
+                type = getElementType(type);
+                
+                if (type.isEntity) {
                     const typeStr = type.toString();
                     fileId = `${typeStr.substring(typeStr.lastIndexOf("Entity(") + 7, typeStr.indexOf(")"))}`;
                     isEntity = true;
-                }  else if (elemType.isLocation) {
+                }  else if (type.isLocation) {
                     fileId = 'tt:location';
-                    isEntity = false;
-                }  else if (elemType.isCurrency) {
+                    isEntity = true;
+                }  else if (type.isCurrency) {
                     fileId = 'tt:currency_code';
+                    isEntity = true;
+                } else if (type.isString) {
                     isEntity = false;
-                }
-
-                if (elemType.isString) {
-                    isEntity = false;
+                } else { // Enum, Date, Measure, Number
+                    if (!type.isEnum) {
+                        console.log(`'${property}': ${type}, // ${label}`);
+                    }
+                    filteredDomainProperties.push(property);
+                    continue;
                 }
             }
-            
+
+            // Set file path based on if string or entity
             const outputPath = path.join(outputDir, `${fileId}.${isEntity?'json':'tsv'}`);
-            const inputs = (await this. _readSync(fs.readFile, path.join(inputDir, inputPath))).split(os.EOL);
+
             const data = [];
-            for (const input of inputs) {
-                // Last item in array is empty
-                if (input === '') 
+            for (const qid of qids) {
+                // Tokenizer throws error.
+                if (itemLabels[qid].includes('æ'))
                     continue;
-                const item = JSON.parse(input);
+                
+                const tokens = this._tokenizer.tokenize(itemLabels[qid]).tokens;
+                // if some tokens are uppercase, they are entities, like NUMBER_0,
+                // in which case we ignore this value
+                if (tokens.length === 0 || tokens.some((tok) => /^[A-Z]/.test(tok)))
+                    continue;
+
+                const tokenizedString = tokens.join(' ');    
+                if (this._maxValueLength && 
+                    this._maxValueLength >= 0 && 
+                    tokenizedString.length > this._maxValueLength)
+                    continue;
 
                 if (isEntity) {
-                    // Some entity does not have value. Skip.
-                    if (!('value' in item) || item.value.includes('æ'))
-                        continue;
-
-                    const entity = {
-                        value: item.value,
-                        name: item.name
-                    };
-                    const tokens = this._tokenizer.tokenize(item.value).tokens;
-
-                    // if some tokens are uppercase, they are entities, like NUMBER_0,
-                    // in which case we ignore this value
-                    if (tokens.length === 0 || tokens.some((tok) => /^[A-Z]/.test(tok)))
-                        continue;
-
-                    entity.canonical = tokens.join(' ');
-                    if (this._maxValueLength >= 0 && entity.canonical.length > this._maxValueLength)
-                        continue;
-
-                    data.push(entity);
+                    data.push({
+                        'value': itemLabels[qid],
+                        'name': qid,
+                        'canonical': tokenizedString
+                    });
                 } else {
-                    if (!('value' in item) || item.value.includes('æ'))
-                        continue;
-                    
-                    const value = item.value;
-                    const tokens = this._tokenizer.tokenize(value).tokens;
                     const weight = 1;
-                    
-                    // if some tokens are uppercase, they are entities, like NUMBER_0,
-                    // in which case we ignore this value
-                    if (tokens.length === 0 || tokens.some((tok) => /^[A-Z]/.test(tok)))
-                        continue;
-
-                    const tokenizedString = tokens.join(' ');
-                    if (this._maxValueLength >= 0 && tokenizedString.length > this._maxValueLength)
-                        continue;
-
-                    data.push(`${value}\t${tokenizedString}\t${weight}`);
+                    data.push(`${itemLabels[qid]}\t${tokenizedString}\t${weight}`);
                 }
             }
 
-            // Dump propety data
             if (data.length !== 0) {
-                this._properties[domain].add(property);
-                let dataPath;          
+                console.log(`'${property}': ${type}, // ${label}, found ${data.length} values`);
+                filteredDomainProperties.push(property);
+                // Dump propety data
+                let dataPath;
                 if (!isEntity) {
                     dataPath = `string\t${this._locale}\t${fileId}\t${path.relative(path.join(this._output_dir, canonical), outputPath)}`;
                     let outData = data.join(os.EOL).concat(os.EOL);
@@ -141,33 +133,139 @@ class ParamDatasetGenerator {
                 } else {
                     let outData = { result: 'ok', data };
                     dataPath = `entity\t${this._locale}\t${fileId}\t${path.relative(path.join(this._output_dir, canonical), outputPath)}`;
-                    if (this._pathes[domain].has(dataPath)) {
+                    if (datasetPathes.has(dataPath)) {
                         outData = JSON.parse(await this. _readSync(fs.readFile, outputPath));
-                        outData['data'] = outData['data'].concat(data);
+                        // We should just keep unique value
+                        outData['data'] = Array.from(new Set(outData['data'].concat(data)));
                     }
                     await util.promisify(fs.writeFile)(outputPath, JSON.stringify(outData, undefined, 2), { encoding: 'utf8' });
                 }
-                this._pathes[domain].add(dataPath);
+                datasetPathes.add(dataPath);
             }
         }
+            await Promise.all([
+                util.promisify(fs.writeFile)(this._propery_pathes[6],
+                    Array.from(datasetPathes).join('\n'), { encoding: 'utf8' }),
+                util.promisify(fs.writeFile)(this._propery_pathes[5], 
+                    filteredDomainProperties.join(','), { encoding: 'utf8' })
+            ]);    
+        console.log(`${filteredDomainProperties.length} filtered properties in domain.`);  
+    }
+
+    async _filterItemValues(canonical) {
+        if (!fs.existsSync(this._propery_pathes[0]) || !fs.existsSync(this._propery_pathes[2])) {
+            throw Error('Required file(s) missing.');
+        }
+        const properties = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[0]));
+        const instanceQids = new Set((await this. _readSync(fs.readFile, this._propery_pathes[2])).split(','));
+
+        let propertyQids = [];
+        for (const qids of Object.values(properties)) {
+            propertyQids = propertyQids.concat(qids);
+        }
+        propertyQids = new Set(propertyQids);
+        const propertyValues = {};
+        const instanceValues = {};
+
+        console.log(`Processing items_wikidata_n.json`);
+        const pipeline = fs.createReadStream(path.join(this._input_dir, `items_wikidata_n.json`)).pipe(StreamObject.withParser());
+        pipeline.on('data', async data => {
+            const key = String(data.key);
+            const value = String(data.value);
+
+            if (instanceQids.has(key)) {
+                instanceValues[key] = value;
+            }
+            if (propertyQids.has(key)) {
+                propertyValues[key] = value;
+            }
+        });
+
+        pipeline.on('error', error => console.error(error));
+        pipeline.on('end', async () => {
+            console.log(`Found ${Object.keys(propertyValues).length} items in domain property.`);
+            await Promise.all([
+                util.promisify(fs.writeFile)(this._propery_pathes[3], 
+                    JSON.stringify(propertyValues), { encoding: 'utf8' }),
+                util.promisify(fs.writeFile)(this._propery_pathes[4], 
+                    JSON.stringify(instanceValues), { encoding: 'utf8' })    
+            ]);
+            await this._processData(canonical);
+        });
+    }
+
+    async _mapDomainProperties(domain, canonical, idx) {
+        console.log(`Processing wikidata_short_${idx + 1}.json`);
+        const filteredProperties = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
+        const pipeline = fs.createReadStream(path.join(this._input_dir, `wikidata_short_${idx + 1}.json`)).pipe(StreamObject.withParser());
+        
+        pipeline.on('data', async data => {
+            if (INSTANCE_OF_PROP in data.value) {
+                const entry = new Set(data.value[INSTANCE_OF_PROP]);
+                if (entry.has(domain)) {
+                    for (const [key, value] of Object.entries(data.value)) {
+                        if (key in filteredProperties) {
+                            if (!(key in this._properties)) {
+                                this._properties[key] = [];
+                            }
+                            this._properties[key] = Array.from(new Set(this._properties[key].concat(value)));
+                        }
+                    }
+                    this._instances.add(String(data.key));
+                    console.log(`${this._instances.size} instances in ${canonical} domain with ${Object.keys(this._properties).length} properties (found ${data.key}).`);
+                }
+            }
+        });
+
+        pipeline.on('error', error => console.error(error));
+        pipeline.on('end', async () => {
+            // Stream another wikidata file if there is any left
+            if (idx !== 0) {
+               await this._mapDomainProperties(domain, canonical, idx - 1);
+            } else {
+                console.log(`Found ${this._instances.size} instances in ${canonical} domain with ${Object.keys(this._properties).length} properties.`);
+                await Promise.all([
+                    util.promisify(fs.writeFile)(this._propery_pathes[0], 
+                        JSON.stringify(this._properties), { encoding: 'utf8' }),
+                    util.promisify(fs.writeFile)(this._propery_pathes[1], 
+                        Object.keys(this._properties).join(','), { encoding: 'utf8' }),
+                    util.promisify(fs.writeFile)(this._propery_pathes[2], 
+                        Array.from(this._instances).join(','), { encoding: 'utf8' })    
+                ]);
+                await this._filterItemValues(canonical);
+            }
+        });
     }
 
     async run() {
         await loadSchemaOrgManifest(this._schemaorgManifest, this._schemaorgProperties);
         for (const idx in this._domains) {
+            this._propery_pathes = [
+                path.join(this._output_dir, this._canonicals[idx], 'property_item_map.json'),
+                path.join(this._output_dir, this._canonicals[idx], 'properties_all.txt'),
+                path.join(this._output_dir, this._canonicals[idx], 'instances.txt'),
+                path.join(this._output_dir, this._canonicals[idx], 'property_item_values.json'),
+                path.join(this._output_dir, this._canonicals[idx], 'instance_item_values.json'),
+                path.join(this._output_dir, this._canonicals[idx], 'properties.txt'),
+                path.join(this._output_dir, this._canonicals[idx], 'parameter-datasets.tsv')
+            ];
+            // Set up
             const outputDir = path.join(this._output_dir, this._canonicals[idx], 'parameter-datasets');
             await util.promisify(fsExtra.emptyDir)(outputDir); // Clean up parameter-datasets
             await util.promisify(fs.mkdir)(outputDir, { recursive: true });
-            const domainLabel = await getItemLabel(this._domains[idx]);    
-            await Promise.all([
-                this._processData(this._domains[idx], domainLabel, 'labeled_entity', outputDir, true, this._canonicals[idx]),
-                this._processData(this._domains[idx], domainLabel, 'value', outputDir, false, this._canonicals[idx]),
-                this._processData(this._domains[idx], domainLabel, 'external', outputDir, false, this._canonicals[idx])
-            ]);
-            await util.promisify(fs.writeFile)(path.join(this._output_dir, this._canonicals[idx], 'parameter-datasets.tsv'), 
-                Array.from(this._pathes[this._domains[idx]]).join('\n'), { encoding: 'utf8' });
-            await util.promisify(fs.writeFile)(path.join(this._output_dir, this._canonicals[idx], 'properties.txt'), 
-                Array.from(this._properties[this._domains[idx]]).join(','), { encoding: 'utf8' });
+
+            // Process domain property map for the first time then process data.
+            if (!fs.existsSync(this._propery_pathes[0]) || 
+                !fs.existsSync(this._propery_pathes[1]) || 
+                !fs.existsSync(this._propery_pathes[2]) ||
+                !fs.existsSync(this._propery_pathes[3]) ||
+                !fs.existsSync(this._propery_pathes[4])) {
+                this._properties = {};
+                this._instances = new Set();    
+                await this._mapDomainProperties(this._domains[idx], this._canonicals[idx], 1);
+            } else {
+                await this._processData(this._canonicals[idx]);
+            }
         }
     }
 }

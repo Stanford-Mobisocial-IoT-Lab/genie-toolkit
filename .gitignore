@@ -58,3 +58,9 @@ genie-??????
 !test/data/fa/*
 !test/data/thingpedia.tt
 !test/thingpedia.tt
+
+starter/wikidata294/config.mk
+starter/wikidata294/shared-parameter-datasets/*
+starter/wikidata294/datadir/*
+starter/wikidata294/models/*
+starter/wikidata294/*/parameter-datasets

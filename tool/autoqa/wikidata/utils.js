@@ -355,11 +355,11 @@ async function getEquivalent(id) {
 /**
  * 
  */
-async function getType(domain, domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault) {
+async function getType(domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault) {
     if (property in PROPERTY_TYPE_OVERRIDE)
         return PROPERTY_TYPE_OVERRIDE[property];
 
-    const elemType = await getElemType(domain, domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault);
+    const elemType = await getElemType(domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault);
     if (elemType) {
         if (PROPERTY_FORCE_ARRAY.has(property))
             return new Type.Array(elemType);
@@ -377,7 +377,7 @@ async function getType(domain, domainLabel, property, propertyLabel, schemaorgPr
 /**
  * 
  */
-async function getElemType(domain, domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault) {
+async function getElemType(domainLabel, property, propertyLabel, schemaorgProperties, setDefault) {
     if (PROPERTY_TYPE_SAME_AS_SUBJECT.has(property))
         return new Type.Entity(`org.wikidata:${snakecase(domainLabel)}`);
 
@@ -385,7 +385,7 @@ async function getElemType(domain, domainLabel, property, propertyLabel, schemao
     if (enumEntries.length > 0)
         return new Type.Enum(enumEntries.map(cleanEnumValue));
 
-    const classes = await getClasses(property);
+    const classes = await getClasses(property); // Replace
     if (classes.includes('Q18636219')) // Wikidata property with datatype 'time'
         return Type.Date;
     if (classes.includes('Q18616084')) // Wikidata property to indicate a language
@@ -414,6 +414,10 @@ async function getElemType(domain, domainLabel, property, propertyLabel, schemao
             return Type.Number;
         if (units.includes('United States dollar'))
             return Type.Currency;
+        if (units.includes('years old'))
+            return Type.Number; // To-do
+        if (units.includes('gram per cubic metre'))
+            return Type.Number; // To-do
         console.error(`Unknown measurement type with unit ${units.join(', ')} for ${property}`);
         return Type.Number;
     }
@@ -422,8 +426,13 @@ async function getElemType(domain, domainLabel, property, propertyLabel, schemao
     if (range)
         return Type.Number;
 
-    if (propertyLabel.startsWith('manner of') || propertyLabel.startsWith('cause of'))
+    if (propertyLabel.startsWith('manner of') || 
+        propertyLabel.startsWith('cause of') || 
+        propertyLabel.startsWith('named after'))
         return Type.String;
+
+    if (propertyLabel.startsWith('member of') || propertyLabel.startsWith('part of'))
+        return new Type.Entity(`org.wikidata:organization`);
 
     const subpropertyOf = await wikidataQuery(`SELECT ?value WHERE { wd:${property} wdt:P1647 ?value. } `);
     if (subpropertyOf.some((property) => property.value.value === 'http://www.wikidata.org/entity/P18'))
@@ -456,17 +465,6 @@ async function getElemType(domain, domainLabel, property, propertyLabel, schemao
         }
         if (!schemaorgType.isCompound)
             return schemaorgType;
-    }
-
-    // Based on parameter_datasets.tsv type
-    if (paramDatasets) {
-        const typeName = `org.wikidata:${argnameFromLabel(propertyLabel)}`;
-        if (paramDatasets['string'].has(typeName)) {
-            return Type.String;
-        }
-        if (paramDatasets['entity'].has(typeName)) {
-            return new Type.Entity(typeName);
-        }
     }
 
     if (setDefault) {

@@ -38,16 +38,67 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P1352': Type.Number, // ranking
     'P1303': new Type.Array(new Type.Entity('org.wikidata:musical_instrument')), // instrument
     'P264': new Type.Array(new Type.Entity('org.wikidata:record_label')), // record_label
-    'P361': new Type.Array(Type.String), // part_of
     'P398': new Type.Array(new Type.Entity('org.wikidata:star')), // child_astronomical_body
     'P397': new Type.Array(new Type.Entity('org.wikidata:star')), // parent_astronomical_body
     'P2227': Type.Number, // metallicity
     'P85': new Type.Entity('org.wikidata:song'), // anthem
     'P942': new Type.Entity('org.wikidata:song'), // theme_music
+    // From country domain
     'P36': new Type.Entity('org.wikidata:city'), // capital
-    'P206': new Type.Array(Type.String), // located_in_or_next_to_body_of_water
+    'P190': new Type.Array(new Type.Entity('org.wikidata:city')), // sister city
+    'P206': new Type.Array(new Type.Entity('org.wikidata:body_of_water')), // located_in_or_next_to_body_of_water
     'P610': Type.Location, // highest point
     'P1589': Type.Location, // lowest point
+    'P38': Type.Currency,
+    'P1313': new Type.Entity('org.wikidata:position'), // office held by head of government
+    'P237': new Type.Array(new Type.Entity('org.wikidata:coat_of_arms')), // coat of arms
+    'P421': new Type.Entity('org.wikidata:time_zone'),// located in time zone
+    'P163': new Type.Entity('org.wikidata:flag'),// flag
+    'P194': new Type.Entity('org.wikidata:organization'),// legislative body
+    'P793': new Type.Array(new Type.Entity('org.wikidata:event')), // significant event    
+    'P1456': new Type.Array(new Type.Entity('org.wikidata:monuments')), // list of monuments
+    'P376': Type.Location, //located on astronomical body
+    'P1435': new Type.Entity('org.wikidata:monuments'), // heritage status
+    'P355': new Type.Entity('org.wikidata:organization'), // subsidiary
+    'P1376': new Type.Entity('org.wikidata:country'), // capital of
+    'P1448': Type.String, // official name
+    'P3238': new Type.Entity('org.wikidata:phone_number'), // trunk prefix
+    'P1451': Type.String, // motto text
+    'P443': new Type.Entity('org.wikidata:audio'), // pronunciation audio
+    'P1814': Type.String, // name in kana
+    'P487': Type.String, // Unicode character
+    'P395': Type.String, // licence plate code
+    'P1705': new Type.Entity('tt:iso_lang_code'), // native label
+    'P1813': new Type.Entity('org.wikidata:acronym'), // short name
+    'P3075': new Type.Entity('org.wikidata:religion'), // official religion
+    'P51': new Type.Entity('org.wikidata:audio'), // audio
+    'P2013': new Type.Entity('org.wikidata:id'), // Facebook ID
+    'P1325': new Type.Entity('tt:url'), // external data available at
+    'P10': new Type.Entity('org.wikidata:video'), // video
+    'P281': new Type.Entity('org.wikidata:postal_code'), // postal code
+    'P15': new Type.Entity('org.wikidata:map'), // route map
+    'P1329': new Type.Entity('org.wikidata:phone_number'), // phone number
+    'P3084': new Type.Entity('org.wikidata:legal_concept'), // freedom of panorama
+    'P1449': Type.String, // nickname
+    // From city domain
+    'P1383': Type.Location, // contains settlement
+    'P2439': new Type.Entity('tt:iso_lang_code'), // language
+    'P366': Type.String, // use
+    'P149': new Type.Entity('org.wikidata:architectural_style'), // architectural style
+    'P1001': new Type.Entity('org.wikidata:organization'), // applies to jurisdiction
+    'P837': Type.Date, // day in year for periodic occurrence
+    'P937': Type.Location, // work location
+    'P2348': Type.Date, // period
+    'P27': new Type.Entity('org.wikidata:country'), // country of citizenship
+    'P1382': Type.String, // coincident with, found 4 values
+    'P186': new Type.Entity('org.wikidata:material'), // material used
+    'P1056': new Type.Entity('org.wikidata:material'), // product
+    'P1576': Type.String, // lifestyle
+    'P530': new Type.Entity('org.wikidata:country'), // diplomatic relation
+    'P495': new Type.Entity('org.wikidata:country'), // country of origin
+    'P708': new Type.Entity('org.wikidata:religion'), // diocese
+    'P611': new Type.Entity('org.wikidata:religion'), // religious order
+    'P931': Type.Location, // place served by airport
 };
 
 // properties that should have the same type as the subject

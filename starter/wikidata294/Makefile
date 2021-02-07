@@ -1,9 +1,13 @@
 geniedir = ../..
 memsize := 16000
 genie = node --require ts-node/register --experimental_worker --max_old_space_size=$(memsize) $(geniedir)/tool/genie.ts
+thingpedia_cli = thingpedia
+thingpedia_url = https://thingpedia.stanford.edu/thingpedia
+
+-include ./config.mk
 
 # aws setup (temporary)
-owner ?= silei
+owner ?= yamamura
 project = wikidata2
 
 
@@ -83,14 +87,14 @@ custom_train_nlu_flags ?=
 eval_set ?= eval
 
 
-.PHONY: clean syncup syncdown datadir
+.PHONY: clean clean-manfiest clean-params clean-data datadir
 .SECONDARY:
 
 
 emptydataset.tt:
 	echo 'dataset @empty {}' > $@
 
-%/wikidata.tt: %/parameter-datasets.tsv $(geniedir)/tool/autoqa/wikidata/process-schema.js
+$(experiment)/wikidata.tt: $(experiment)/parameter-datasets.tsv $(geniedir)/tool/autoqa/wikidata/process-schema.js
 	mkdir -p $(dir $@)
 	$(genie) wikidata-process-schema  -o $@.tmp --entities $(experiment)/entities.json \
 		--domains $(class) \
@@ -100,26 +104,36 @@ emptydataset.tt:
 		$(process_schemaorg_flags)
 	mv $@.tmp $@
 
-$(experiment)/parameter-datasets.tsv: $(geniedir)/tool/autoqa/wikidata/preprocess-data.js
+shared-parameter-datasets.tsv:
+	$(thingpedia_cli) --url $(thingpedia_url) --developer-key $(developer_key) --access-token invalid \
+	  download-entity-values --manifest $@ --append-manifest -d shared-parameter-datasets
+	$(thingpedia_cli) --url $(thingpedia_url) --developer-key $(developer_key) --access-token invalid \
+	  download-string-values --manifest $@ --append-manifest -d shared-parameter-datasets
+	sed -e "s|$(echo -e '\t')shared-parameter-datasets|$(echo -e '\t')../shared-parameter-datasets|g" shared-parameter-datasets.tsv > $@.tmp
+	mv $@.tmp $@
+
+$(experiment)/parameter-datasets.tsv: $(geniedir)/tool/autoqa/wikidata/preprocess-data.js shared-parameter-datasets.tsv
 	mkdir -p $(dir $@)
 	$(genie) wikidata-preprocess-data \
 		--domains $(class) \
 		--domain-canonicals $(canonical) \
-		--input /mnt/data/shared/wikidata/value \
+		--input datadir \
 		--output ./ \
 		$(process_schemaorg_flags)
+	cat shared-parameter-datasets.tsv >> $(experiment)/parameter-datasets.tsv
 
-%/constants.tsv: %/parameter-datasets.tsv %/wikidata.tt
-	$(genie) sample-constants -o $@.tmp --parameter-datasets $*/parameter-datasets.tsv --thingpedia $*/wikidata.tt --devices org.wikidata
+
+$(experiment)/constants.tsv: $(experiment)/parameter-datasets.tsv $(experiment)/wikidata.tt
+	$(genie) sample-constants -o $@.tmp --parameter-datasets $(experiment)/parameter-datasets.tsv --thingpedia $(experiment)/wikidata.tt --devices org.wikidata
 	cat $(geniedir)/data/en-US/constants.tsv >> $@.tmp
 	mv $@.tmp $@
 
-%/manifest.tt: %/constants.tsv %/wikidata.tt %/parameter-datasets.tsv models/paraphraser-bart-large-speedup-megabatch-5m
+$(experiment)/manifest.tt: $(experiment)/constants.tsv $(experiment)/wikidata.tt $(experiment)/parameter-datasets.tsv
 	$(genie) auto-annotate -o $@.tmp \
-	--constants $*/constants.tsv \
-	--thingpedia $*/wikidata.tt \
+	--constants $(experiment)/constants.tsv \
+	--thingpedia $(experiment)/wikidata.tt \
 	--functions $(canonical) \
-	--parameter-datasets $*/parameter-datasets.tsv \
+	--parameter-datasets $(experiment)/parameter-datasets.tsv \
 	--dataset wikidata \
 	$(annotate_flags) \
 	--debug
@@ -141,6 +155,14 @@ $(experiment)/augmented.tsv : $(experiment)/synthetic.tsv $(experiment)/paramete
 	  --synthetic-expand-factor 1 --quoted-paraphrasing-expand-factor 60 --no-quote-paraphrasing-expand-factor 20 --quoted-fraction 0.0 \
 	  --debug --no-requotable $(experiment)/synthetic.tsv
 	mv $@.tmp $@
+
+$(experiment)/eval-synthetic/annotated.tsv:
+	mkdir -p $(experiment)/eval-synthetic
+	wget https://almond-static.stanford.edu/test-data/wikidata/$(experiment)/eval-synthetic.tsv -O $@
+
+evaluate: $(experiment)/$(eval_set)/annotated.tsv $(experiment)/manifest.tt
+	$(genie) evaluate-server --url "file://$(abspath $(experiment)/models/$(model))" --thingpedia $(experiment)/manifest.tt $(experiment)/$(eval_set)/annotated.tsv --debug --csv-prefix $(eval_set) --csv --min-complexity 1 --max-complexity 3 -o $(experiment)/$(eval_set)/$(model).results.tmp | tee $(experiment)/$(eval_set)/$(model).debug
+	mv $(experiment)/$(eval_set)/$(model).results.tmp $(experiment)/$(eval_set)/$(model).results
 
 datadir: $(experiment)/augmented.tsv
 	mkdir -p $@
@@ -178,9 +200,16 @@ train:
 	  $(custom_train_nlu_flags)
 
 clean:
-	for domain in $(all_experiments) ; do \
-		rm -rf $$domain/constants.tsv  $$domain/manifest.tt $$domain/wikidata.tt ;\
-	done
+	rm -rf $(experiment)/synthetic* $(experiment)/entities.json $(experiment)/parameter-datasets* $(experiment)/wikidata.tt $(experiment)/manifest.tt $(experiment)/augmented.tsv $(experiment)/constants.tsv $(experiment)/*.tmp
+
+clean-manfiest:
+	rm -rf $(experiment)/constants.tsv  $(experiment)/manifest.tt $(experiment)/wikidata.tt 
+
+clean-params:
+	rm -rf $(experiment)/parameter-datasets*
+
+clean-data:
+	rm -rf $(experiment)/augmented.tsv  $(experiment)/synthetic*
 
 $(experiment)/models/%/best.pth:
 	mkdir -p $(experiment)/models/

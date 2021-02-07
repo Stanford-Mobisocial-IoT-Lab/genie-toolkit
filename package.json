@@ -52,6 +52,7 @@
     "sockaddr": "^1.0.1",
     "sqlite3": "5.0.2",
     "stemmer": "^1.0.5",
+    "stream-json": "^1.7.1",
     "string-interp": "^0.3.1",
     "thingpedia": "^2.9.0-alpha.3",
     "thingtalk": "^2.0.0-alpha.5",
