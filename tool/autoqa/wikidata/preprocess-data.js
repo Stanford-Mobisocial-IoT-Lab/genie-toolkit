@@ -16,8 +16,6 @@ const StreamObject = require('stream-json/streamers/StreamObject');
 const INSTANCE_OF_PROP = "P31"
 
 const {
-    getItemLabel,
-    getPropertyLabel,
     getType,
     getElementType,
     argnameFromLabel,
@@ -122,7 +120,10 @@ class ParamDatasetGenerator {
             }
 
             if (data.length !== 0) {
-                console.log(`'${property}': ${type}, // ${label}, found ${data.length} values`);
+                if (!type) { // Print unmapped type.
+                    console.log(`'${property}': ${type}, // ${label}, found ${data.length} values`);
+                }
+                
                 filteredDomainProperties.push(property);
                 // Dump propety data
                 let dataPath;
@@ -194,7 +195,45 @@ class ParamDatasetGenerator {
         });
     }
 
-    async _mapDomainProperties(domain, canonical, idx) {
+    async _mapDomainRevProperties(canonical) {
+        if (!fs.existsSync(this._propery_pathes[0]) || !fs.existsSync(this._propery_pathes[2])) {
+            throw Error('Required file(s) missing.');
+        }
+
+        console.log('Processing comp_wikidata_rev.json')
+        const properties = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[0]));
+        const instanceQids = new Set((await this. _readSync(fs.readFile, this._propery_pathes[2])).split(','));        
+        const filteredProperties = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
+        const pipeline = fs.createReadStream(path.join(this._input_dir, `comp_wikidata_rev.json`)).pipe(StreamObject.withParser());
+
+        pipeline.on('data', async data => {
+            if (instanceQids.has(data.key)) {
+                for (const [key, value] of Object.entries(data.value)) {
+                    if (key in filteredProperties) {
+                        if (!(key in properties)) {
+                            console.log(`${Object.keys(properties).length} properties in ${canonical} domain (found ${key}).`);
+                            properties[key] = [];
+                        }
+                        properties[key] = Array.from(new Set(properties[key].concat(value)));
+                    }
+                }
+            }
+        });
+
+        pipeline.on('error', error => console.error(error));
+        pipeline.on('end', async () => {
+            console.log(`Found ${instanceQids.size} instances in ${canonical} domain with ${Object.keys(properties).length} properties.`);
+            await Promise.all([
+                util.promisify(fs.writeFile)(this._propery_pathes[0], 
+                    JSON.stringify(properties), { encoding: 'utf8' }),
+                util.promisify(fs.writeFile)(this._propery_pathes[1], 
+                    Object.keys(properties).join(','), { encoding: 'utf8' })
+            ]);
+            await this._filterItemValues(canonical);
+        });
+    }
+
+    async _mapDomainProperties(domain, canonical, idx, mapReverse) {
         console.log(`Processing wikidata_short_${idx + 1}.json`);
         const filteredProperties = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
         const pipeline = fs.createReadStream(path.join(this._input_dir, `wikidata_short_${idx + 1}.json`)).pipe(StreamObject.withParser());
@@ -221,18 +260,21 @@ class ParamDatasetGenerator {
         pipeline.on('end', async () => {
             // Stream another wikidata file if there is any left
             if (idx !== 0) {
-               await this._mapDomainProperties(domain, canonical, idx - 1);
+               await this._mapDomainProperties(domain, canonical, idx - 1, mapReverse);
             } else {
                 console.log(`Found ${this._instances.size} instances in ${canonical} domain with ${Object.keys(this._properties).length} properties.`);
                 await Promise.all([
                     util.promisify(fs.writeFile)(this._propery_pathes[0], 
                         JSON.stringify(this._properties), { encoding: 'utf8' }),
-                    util.promisify(fs.writeFile)(this._propery_pathes[1], 
-                        Object.keys(this._properties).join(','), { encoding: 'utf8' }),
                     util.promisify(fs.writeFile)(this._propery_pathes[2], 
                         Array.from(this._instances).join(','), { encoding: 'utf8' })    
                 ]);
-                await this._filterItemValues(canonical);
+                
+                if (mapReverse) { // Map reverse relations as well.
+                    await this._mapDomainRevProperties(canonical);
+                } else {
+                    await this._filterItemValues(canonical);
+                }
             }
         });
     }
@@ -262,7 +304,7 @@ class ParamDatasetGenerator {
                 !fs.existsSync(this._propery_pathes[4])) {
                 this._properties = {};
                 this._instances = new Set();    
-                await this._mapDomainProperties(this._domains[idx], this._canonicals[idx], 1);
+                await this._mapDomainProperties(this._domains[idx], this._canonicals[idx], 1, true);
             } else {
                 await this._processData(this._canonicals[idx]);
             }

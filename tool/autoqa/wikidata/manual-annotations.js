@@ -80,6 +80,34 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P1329': new Type.Entity('org.wikidata:phone_number'), // phone number
     'P3084': new Type.Entity('org.wikidata:legal_concept'), // freedom of panorama
     'P1449': Type.String, // nickname
+    'P101': new Type.Entity('org.wikidata:field_of_work'), // field of work
+    'P144': Type.String, // based on
+    'P921': new Type.Entity('org.wikidata:topic'), // main subject
+    'P710': new Type.Entity('org.wikidata:participant'), // participant
+    'P272': new Type.Entity('org.wikidata:production_company'), // production company
+    'P449': new Type.Entity('org.wikidata:production_company'), // original network
+    'P841': Type.Date, // feast day
+    'P180': new Type.Entity('org.wikidata:topic'), // depicts
+    'P2695': new Type.Entity('org.wikidata:type_locality'), // type locality
+    'P1408': new Type.Entity('org.wikidata:city'), // licensed to broadcast to
+    'P750':  new Type.Entity('org.wikidata:distributor'), // distributor
+    'P1027': new Type.Entity('org.wikidata:award'), // conferred by
+    'P532': Type.Location, // port of registry, found 11 values
+    'P749': new Type.Entity('org.wikidata:organization'), // parent organization
+    'P121': new Type.Entity('org.wikidata:item_operated'), // item operated
+    'P437': new Type.Entity('org.wikidata:media_type'), // distribution
+    'P737': new Type.Entity('org.wikidata:human'), // influenced by
+    'P69': new Type.Entity('org.wikidata:organization'), // educated at
+    'P1433': new Type.Entity('org.wikidata:publication'), // published in
+    'P136': new Type.Entity('org.wikidata:topic'), // genre
+    'P467': new Type.Entity('org.wikidata:organization'), // legislated by, found 1 values
+    'P39': new Type.Entity('org.wikidata:position'), // position held, found 2 values
+    'P504': Type.Location, // home port
+    'P609': Type.Location, // terminus location
+    'P1416': new Type.Entity('org.wikidata:organization'), // affiliation, found 1 values
+    'P608': new Type.Entity('org.wikidata:event'), // exhibition history, found 1 values
+    'P805': new Type.Entity('org.wikidata:topic'), // subject of
+    'P3179': Type.Location, // territory overlaps
     // From city domain
     'P1383': Type.Location, // contains settlement
     'P2439': new Type.Entity('tt:iso_lang_code'), // language
@@ -135,7 +163,7 @@ const PROPERTY_FORCE_ARRAY = new Set([
     'P800', // notable_work (this will be just array of string, wikidata doesn't have 'creative work'
     'P37', // official language
     'P6', // head of government
-    'P150', // contains_administrative_territorial_entity,
+    //'P150', // contains_administrative_territorial_entity,
     'P421', // time zone
     'P170', // creator
     'P58', // screenwriter
