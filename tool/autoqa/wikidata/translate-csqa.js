@@ -10,6 +10,12 @@ const assert = require('assert');
 
 const ThingTalk = require('thingtalk');
 
+import {
+    wikidataQuery,
+    getItemLabel,
+    argnameFromLabel,
+} from './utils';
+
 const QUESTION_TYPES = new Set(
     ['Simple Question (Direct)',
     'Verification (Boolean) (All)',
@@ -27,6 +33,8 @@ class CsqaTranslater {
         this._output_dir = options.outputDir;
         this._dataset = options.dataset;
         this._instances;
+        this._propertyLabels;
+        this._entityLabels;
         this._pathes;
     }
 
@@ -91,16 +99,11 @@ class CsqaTranslater {
     }
 
     /**
-     * Helper functions to parse logical form to thingtalk syntax
-     */
-
-    /**
      * A15: set->{e} subset where entity e in set and belong to entity type tp
      */
     async _set(parsed, lf, idx, canonical) {
         assert(!Array.isArray(lf[idx + 1])); // assume [{}, e]
         assert(_.isEqual(parsed, {})); // assume base case
-        // to-do; map type or assert.
 
         // 'e' indicates entity and does not filter anything.
         if (lf[idx+1] !== 'e') {
@@ -109,7 +112,7 @@ class CsqaTranslater {
                 values: lf[idx+1]
             }];
         }
-        parsed.table = `@org.wikidata.${canonical}`;
+        parsed.table = `@org.wikidata.${canonical}()`;
         parsed.type = 'set';
         parsed.op = 'set';
         lf.splice(idx + 1, 1);
@@ -120,12 +123,12 @@ class CsqaTranslater {
      */
     async _find(parsed, lf, idx, canonical) {
         assert(!Array.isArray(lf[idx + 2]));
-        const set = await this._parseLf(lf[idx + 1], canonical);
-        assert(set.table);
-        assert(set.filter);
-        assert(set.type === 'set');
 
-        Object.assign(parsed, set);
+        Object.assign(parsed, await this._parseLf(lf[idx + 1], canonical));
+        assert(parsed.table);
+        assert(parsed.filter);
+        assert(parsed.type === 'set');
+
         parsed.projection = [lf[idx+2]];
         parsed.op = 'find';
         lf.splice(idx + 1, 2);
@@ -138,13 +141,12 @@ class CsqaTranslater {
      */
     async _count(parsed, lf, idx, canonical, op) {
         assert(['count', 'max', 'min'].includes(op));
-        const set = await this._parseLf(lf[idx + 1], canonical);
-        assert(set.table);
-        assert(set.filter);
-        assert(set.type === 'set');
-        assert(set.projection);
+        Object.assign(parsed, await this._parseLf(lf[idx + 1], canonical));
+        assert(parsed.table);
+        assert(parsed.filter);
+        assert(parsed.type === 'set');
+        assert(parsed.projection);
 
-        Object.assign(parsed, set);
         parsed.op = op;
         // If count, we just need to count number of tuples        
         if (op === 'count') {
@@ -166,14 +168,12 @@ class CsqaTranslater {
      */
     async _traverse(parsed, lf, idx, canonical) {
         assert(lf[idx + 1] === 'Count');
-        
-        const set = await this._parseLf(lf[idx + 2], canonical);
-        assert(set.table);
-        assert(set.filter);
-        assert(set.type === 'set');
 
-        // Might need extra handling.
-        Object.assign(parsed, set);
+        Object.assign(parsed, await this._parseLf(lf[idx + 2], canonical));
+        assert(parsed.table);
+        assert(parsed.filter);
+        assert(parsed.type === 'set');
+
         parsed.op = 'traverse';
         lf.splice(idx + 1, 2);
     }
@@ -185,14 +185,12 @@ class CsqaTranslater {
         assert(!Array.isArray(lf[idx + 2]));
         assert(!Array.isArray(lf[idx + 3]));
         assert(_.isEqual(parsed, {})); // assume base case
-        // to-do: assert if property is part of canonical table.
-        // to-do: assert if lf[idx+2] is instance of canical table.
 
         parsed.filter = [{ 
             property: lf[idx + 1],
             values: reverse ? lf[idx + 2] : lf[idx + 3]
         }];
-        parsed.table = `@org.wikidata.${canonical}`;
+        parsed.table = `@org.wikidata.${canonical}()`;
         parsed.projection = [lf[idx + 1]];
         parsed.type = 'set';
         parsed.op = reverse ? 'reverse_pretype' : 'pretype';
@@ -204,13 +202,13 @@ class CsqaTranslater {
      */
     async _in(parsed, lf, idx, canonical) {
         assert(!Array.isArray(lf[idx + 1]));
-        const set = await this._parseLf(lf[idx+2], canonical);
-        assert(set.table);
-        assert(set.filter);
-        assert(set.type === 'set');
-        assert(set.projection && set.projection.length === 1);
 
-        Object.assign(parsed, set);
+        Object.assign(parsed, await this._parseLf(lf[idx+2], canonical));
+        assert(parsed.table);
+        assert(parsed.filter);
+        assert(parsed.type === 'set');
+        assert(parsed.projection && set.projection.length === 1);
+
         parsed.op = 'in';
         parsed.type = 'bool';
         parsed.filter.push('inter');
@@ -226,13 +224,13 @@ class CsqaTranslater {
      */
     async _find_reverse(parsed, lf, idx, canonical) {
         assert(!Array.isArray(lf[idx+2]));
-        const set = await this._parseLf(lf[idx+1], canonical);
-        assert(set.table);
-        assert(set.filter);
-        assert(set.type === 'set');
-        assert(!set.projection);
 
-        Object.assign(parsed, set);
+        Object.assign(parsed, await this._parseLf(lf[idx+1], canonical));
+        assert(parsed.table);
+        assert(parsed.filter);
+        assert(parsed.type === 'set');
+        assert(!parsed.projection);
+
         parsed.projection = [lf[idx + 2]];
         parsed.op = 'find_reverse';
         lf.splice(idx + 1, 2);
@@ -240,39 +238,17 @@ class CsqaTranslater {
 
     /**
      * A23: set->filter(tp, set), subset where entity e in set and belong to entity type tp
+     * Ignoring type constraints thingtalk does not support
      */
     async _filter(parsed, lf, idx, canonical) {
         assert(!Array.isArray(lf[idx + 1]));
-        
-        const set = await this._parseLf(lf[idx+2], canonical);
-        assert(set.table);
-        assert(set.filter);
-        assert(set.type === 'set');
-        assert(set.projection);
 
-        Object.assign(parsed, set);
-        if (parsed.projection.length === 1) {
-            parsed.filter.push('inter');
-            parsed.filter.push({
-                property: parsed.projection[0],
-                type: lf[idx + 1]
-            });
-        } else {
-            parsed.filter = [parsed.filter, 'inter'];
-            const filter = [{
-                property: parsed.projection[0],
-                type: lf[idx + 1]
-            }];
-            // Enforce types in each projection
-            for (let i = 1; i < parsed.projection.length; i++) {
-                filter.push('union');
-                filter.push({
-                    property: parsed.projection[i],
-                    type: lf[idx + 1]
-                });
-            }
-            parsed.filter.push(filter);
-        }
+        Object.assign(parsed, await this._parseLf(lf[idx + 2], canonical));
+        assert(parsed.table);
+        assert(parsed.filter);
+        assert(parsed.type === 'set');
+        assert(parsed.projection);
+
         lf.splice(idx + 1, 2);
     }
 
@@ -283,18 +259,21 @@ class CsqaTranslater {
      */
     async _compare(parsed, lf, idx, canonical, op) {
         const num = await this._parseLf(lf[idx + 1], canonical);
-        const set = await this._parseLf(lf[idx + 2], canonical);
+        Object.assign(parsed, await this._parseLf(lf[idx + 2], canonical));
         assert(num.op == 'count');
         assert(num.type === 'num');
         assert(num.projection);
-        assert(set.op == 'traverse');
-        assert(set.type === 'set');
-        assert(num.table === set.table);
-
-        Object.assign(parsed, set);
+        assert(parsed.op == 'traverse');
+        assert(parsed.type === 'set');
+        assert(num.table === parsed.table);
+        
+        const set = JSON.parse(JSON.stringify(parsed));
+        set.op = 'count'
+        set.type = 'num'
         parsed.filter.push('inter');
         parsed.filter.push({
             num: num,
+            set: set,
             op: op
         });
         parsed.op = op;
@@ -315,18 +294,44 @@ class CsqaTranslater {
         assert(set1.filter);
 
         Object.assign(parsed, set1);
-        parsed.op = op;
         if (set1.projection && set2.projection) {
             parsed.projection = Array.from(new Set(set1.projection.concat(set2.projection)));
         } else if (set2.projection && op !== 'diff') {
             parsed.projection = set2.projection;
         }
+        parsed.op = op;
+        lf.splice(idx + 1, 2);
+
+        // Logical form often tries to perform union/inter/diff on exact same set.
+        // It is either meaningless or incorrect. Hence returing in such case
+        // without applying second filter.
+        if (_.isEqual(set1.filter, set2.filter)) return;
+
         if (set1.filter && set2.filter) {
-            parsed.filter = [set1.filter, op, set2.filter];
+            if (op === 'diff') {
+                op = 'inter';
+                // De Morgan's laws
+                for (let i = 0; i < set2.filter.length; i++) {
+                    switch(set2.filter[i]) {
+                        case('union'):
+                            set2.filter[i] = 'inter';
+                            break;
+                        case('inter'):
+                            set2.filter[i] = 'union';
+                            break;
+                        default:
+                            set2.filter[i].negate = true;
+                    }
+                }
+            }
+            parsed.filter = [
+                set1.filter.length === 1 ? set1.filter[0] : set1.filter, 
+                op, 
+                set2.filter.length === 1 ? set2.filter[0] : set2.filter, 
+            ];
         } else if (set2.filter && op !== 'union') {
             assert(false); // Assuming no such case.
         }
-        lf.splice(idx + 1, 2);
     }
 
     async _parseLf(lf, canonical) {
@@ -355,13 +360,13 @@ class CsqaTranslater {
                     await this._merge_set(parsed, lf, idx, canonical, 'diff');
                     break;
                 case '>': // A10: set->larger(set, r, num)
-                    await this._compare(parsed, lf, idx, canonical, 'larger');
+                    await this._compare(parsed, lf, idx, canonical, '>');
                     break;         
                 case '<': // A11: set->less(set, r, num) 
-                    await this._compare(parsed, lf, idx, canonical, 'less');
+                    await this._compare(parsed, lf, idx, canonical, '<');
                     break;
                 case '=': // A12: set->equal(set, r, num)
-                    await this._compare(parsed, lf, idx, canonical, 'equal');
+                    await this._compare(parsed, lf, idx, canonical, '==');
                     break;
                 case 'argmax': // A13: set->argmax(set, r) 
                     await this._count(parsed, lf, idx, canonical, 'max');
@@ -396,41 +401,127 @@ class CsqaTranslater {
         return parsed;
     }
 
+    // to-do: assert if lf[idx+2] is instance of canical table.
+    // to-do; map type or assert.
+    async _buildFilter(filters) {
+        let query = '(';
+        for (const filter of filters) {
+            if(Array.isArray(filter)) {
+                query += `${await this._buildFilter(filter)}`;
+            } else if(typeof filter === "object") {
+                if (filter.property && filter.values) {
+                    const property = filter.property === 'id' ? 'id' : argnameFromLabel(this._propertyLabels[filter.property]);
+                    const values = this._entityLabels[filter.values];
+                    if (values) {
+                        query += `${property} ${filter.negate ?'!=':'=='} "${values.toLowerCase()}"`;
+                    } else {
+                        const label = await getItemLabel(filter.values);
+                        if (label) {
+                            query += `${property} ${filter.negate ?'!=':'=='} "${label.toLowerCase()}"`;
+                            this._entityLabels[filter.values] = label;
+                        } else {
+                            // Since we won't get correct answer, ignore this for now.
+                            console.log(`Not found: ${filter.values}`);
+                        }
+                    }
+                } else if (filter.num  && filter.op && filter.set) { // Incomplete as compare func not yet implemented.
+                    assert(filter.num.op === 'count');
+                    assert(filter.set.op === 'count');
+                    query += `(${await this._buildThingTalk(filter.set)}) ${filter.op} (${await this._buildThingTalk(filter.num)})`
+                } else {
+                    throw Error(`Unknown filter: ${filter}`);
+                }
+            } else {
+                switch(filter) {
+                    case('union'):
+                        query += ' || ';
+                        break;
+                    case('inter'):
+                        query += ' && ';
+                        break;
+                    default:
+                        throw Error(`Unknown operation: ${filter}`);
+                }
+            }
+        }
+        query += ')';
+        return query;
+    }
+
+    // to-do: assert if property is part of canical table.
+    async _buildProjection(projection) {
+        const query = [];
+        for (const item of projection) {
+            query.push(argnameFromLabel(this._propertyLabels[item]));
+        }
+        return `[${query.join(',')}]`;
+    }
+
+
+    async _buildThingTalk(lf) {
+        const projection = await this._buildProjection(lf.projection);
+        const filter = await this._buildFilter(lf.filter);
+        let query = `${projection} of ${lf.table} filter ${filter}`;
+        if (lf.op === 'count') {
+            assert(lf.type === 'num');
+            query = `count(${query})`;
+        }
+        if(lf.op === 'in') {
+            assert(lf.type === 'bool');
+            query = `count(${query})`;
+        }
+        return query;
+    }
+
     async _conveter(canonical) {
+        // Skipping in, larger, less, equal, argmin and argmax. Not yet supported in thingtalk.
+        // Hence correspodning helper functions are incomplete.
+        const unsupported = ['A6', 'A10', 'A11', 'A12', 'A13', 'A14'];
         const dialogs = JSON.parse((await this. _readSync(fs.readFile, this._pathes[0])));
+        
         let idx = 0;
+        const annotated = [];
+        const skipped = [];
         for (const dialog of dialogs) {
             const user = dialog.user;
             const system = dialog.system;
-            console.log(idx + ':' + dialog.file + ':' + dialog.turn);
+            console.log(idx + ':' + dialog.file.split('.')[0] + ':' + dialog.turn);
             console.log(user.utterance);
-            //console.log(user.entities_in_utterance);
-            //console.log(user.relations);
-            //console.log(user.type_list);
             console.log(system.utterance);
             console.log(system.active_set);
-            //console.log(user);
-            //console.log(system);
-            //console.log(system.entities_in_utterance);
+
+            const alltk = new Set();
             for (const lf of system.true_lf) {
                 const sketch = [[],[]];
                 await this._splitLf(lf[1], sketch);
-                console.log(lf[0]);
-                const parsed = await this._parseLf(lf[0], canonical);
-                console.log(`Final parsed:`);
-                console.log(parsed);
-                //break;
+                if (!(sketch[1].some(r => unsupported.includes(r)))) { 
+                    const parsed = await this._parseLf(lf[0], canonical);
+                    const thingtalk = `${await this._buildThingTalk(parsed)};`;
+                    alltk.add(thingtalk);
+                }
+            }
+            if (alltk.size === 0) {
+                skipped.push(dialog);
+            } else {
+                dialog.alltk = Array.from(alltk);
+                annotated.push(dialog);
+                console.log(dialog.alltk);
             }
             console.log(`-------------------------------------`);
             idx++;
         }
+        console.log(`${annotated.length} sentences correctly anntated in ${canonical}`);
+        console.log(`${skipped.length} sentences skipped in ${canonical}`);
     }
 
     async run() {
+        this._propertyLabels = JSON.parse(await this. _readSync(fs.readFile, path.join(this._output_dir, 'datadir', 'filtered_property_wikidata4.json')));
+
         for (const idx in this._domains) {
             this._pathes = [
-                path.join(this._output_dir, this._canonicals[idx], `${this._dataset}.json`)
+                path.join(this._output_dir, this._canonicals[idx], `${this._dataset}_unfiltered.json`)
             ];
+            this._entityLabels = JSON.parse(await this. _readSync(fs.readFile, path.join(this._output_dir, this._canonicals[idx], 'property_item_values.json')));
             this._instances = new Set((await this. _readSync(fs.readFile, path.join(this._output_dir, this._canonicals[idx], 'instances.txt'))).split(','));
 
             // Get list of sample questions and answers

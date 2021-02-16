@@ -78,9 +78,6 @@ class ParamDatasetGenerator {
                 } else if (type.isString) {
                     isEntity = false;
                 } else { // Enum, Date, Measure, Number
-                    if (!type.isEnum) {
-                        console.log(`'${property}': ${type}, // ${label}`);
-                    }
                     filteredDomainProperties.push(property);
                     continue;
                 }

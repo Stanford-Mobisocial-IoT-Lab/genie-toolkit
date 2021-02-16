@@ -56,15 +56,6 @@ import {
     PROPERTY_TYPE_SAME_AS_SUBJECT
 } from './manual-annotations';
 
-function argnameFromLabel(label) {
-    return snakecase(label)
-        .replace(/'/g, '') // remove apostrophe
-        .replace(/,/g, '') // remove comma
-        .replace(/_\/_/g, '_or_') // replace slash by or
-        .replace(/[(|)]/g, '') // replace parentheses
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove accent
-}
-
 function getElementType(type) {
     if (type.isArray)
         return getElementType(type.elem);
