@@ -79,7 +79,7 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P15': new Type.Entity('org.wikidata:map'), // route map
     'P1329': new Type.Entity('org.wikidata:phone_number'), // phone number
     'P3084': new Type.Entity('org.wikidata:legal_concept'), // freedom of panorama
-    'P1449': Type.String, // nickname
+    'P1449': new Type.Entity('org.wikidata:name'), // nickname
     'P101': new Type.Entity('org.wikidata:field_of_work'), // field of work
     'P144': Type.String, // based on
     'P921': new Type.Entity('org.wikidata:topic'), // main subject
@@ -127,6 +127,19 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P708': new Type.Entity('org.wikidata:religion'), // diocese
     'P611': new Type.Entity('org.wikidata:religion'), // religious order
     'P931': Type.Location, // place served by airport
+    'P195': new Type.Entity('org.wikidata:collection'), // collection
+    'P559': Type.Location, // terminus, found 61 values
+    'P53': new Type.Entity('org.wikidata:family'), // noble family
+    'P113': Type.Location, // airline hub
+    'P81': new Type.Entity('org.wikidata:railway_line'), // connecting line
+    'P197': Type.Location, // adjacent station
+    'P403': new Type.Entity('org.wikidata:mouth_of_the_watercourse'), // mouth of the watercourse
+    'P734': new Type.Entity('org.wikidata:name'), // family name
+    'P2632': Type.Location, // place of detention
+    'P1686': new Type.Entity('org.wikidata:work'), // for work
+    'P768': new Type.Entity('org.wikidata:district'), // electoral district
+    'P413': new Type.Entity('org.wikidata:position'), // position played on team / speciality
+    'P2554': new Type.Entity('org.wikidata:designer'), // production designer
 };
 
 // properties that should have the same type as the subject

@@ -108,7 +108,7 @@ class CsqaTranslater {
         // 'e' indicates entity and does not filter anything.
         if (lf[idx+1] !== 'e') {
             parsed.filter = [{ 
-                property: 'id' , 
+                property: this._instances.has(lf[idx+1])? 'id':undefined, 
                 values: lf[idx+1]
             }];
         }
@@ -129,7 +129,10 @@ class CsqaTranslater {
         assert(parsed.filter);
         assert(parsed.type === 'set');
 
-        parsed.projection = [lf[idx+2]];
+        parsed.projection = [lf[idx + 2]];
+        if (!parsed.filter[parsed.filter.length - 1].property) {
+            parsed.filter[parsed.filter.length - 1].property = [lf[idx + 2]];
+        }
         parsed.op = 'find';
         lf.splice(idx + 1, 2);
     }
@@ -232,6 +235,9 @@ class CsqaTranslater {
         assert(!parsed.projection);
 
         parsed.projection = [lf[idx + 2]];
+        if (!parsed.filter[parsed.filter.length - 1].property) {
+            parsed.filter[parsed.filter.length - 1].property = [lf[idx + 2]];
+        }
         parsed.op = 'find_reverse';
         lf.splice(idx + 1, 2);
     }
@@ -291,7 +297,7 @@ class CsqaTranslater {
         assert(set1.table === set2.table);
         assert(set1.type === 'set');
         assert(set2.type === 'set');
-        assert(set1.filter);
+        assert(set1.filter); 
 
         Object.assign(parsed, set1);
         if (set1.projection && set2.projection) {
@@ -301,13 +307,15 @@ class CsqaTranslater {
         }
         parsed.op = op;
         lf.splice(idx + 1, 2);
+        const property = set1.filter[set1.filter.length - 1].property;
+        assert(property);
 
         // Logical form often tries to perform union/inter/diff on exact same set.
         // It is either meaningless or incorrect. Hence returing in such case
         // without applying second filter.
         if (_.isEqual(set1.filter, set2.filter)) return;
 
-        if (set1.filter && set2.filter) {
+        if (property && set2.filter && set2.filter[set2.filter.length - 1].property) {
             if (op === 'diff') {
                 op = 'inter';
                 // De Morgan's laws
@@ -329,7 +337,7 @@ class CsqaTranslater {
                 op, 
                 set2.filter.length === 1 ? set2.filter[0] : set2.filter, 
             ];
-        } else if (set2.filter && op !== 'union') {
+        } else if (set2.filter  && set2.filter[set2.filter.length - 1].property && op !== 'union') {
             assert(false); // Assuming no such case.
         }
     }
@@ -401,8 +409,6 @@ class CsqaTranslater {
         return parsed;
     }
 
-    // to-do: assert if lf[idx+2] is instance of canical table.
-    // to-do; map type or assert.
     async _buildFilter(filters) {
         let query = '(';
         for (const filter of filters) {
@@ -429,7 +435,8 @@ class CsqaTranslater {
                     assert(filter.set.op === 'count');
                     query += `(${await this._buildThingTalk(filter.set)}) ${filter.op} (${await this._buildThingTalk(filter.num)})`
                 } else {
-                    throw Error(`Unknown filter: ${filter}`);
+                    console.log(filter);
+                    throw Error(`Unknown filter:`);
                 }
             } else {
                 switch(filter) {
@@ -448,7 +455,6 @@ class CsqaTranslater {
         return query;
     }
 
-    // to-do: assert if property is part of canical table.
     async _buildProjection(projection) {
         const query = [];
         for (const item of projection) {
@@ -482,6 +488,7 @@ class CsqaTranslater {
         let idx = 0;
         const annotated = [];
         const skipped = [];
+        const test = [];
         for (const dialog of dialogs) {
             const user = dialog.user;
             const system = dialog.system;
@@ -504,6 +511,8 @@ class CsqaTranslater {
                 skipped.push(dialog);
             } else {
                 dialog.alltk = Array.from(alltk);
+                // Just use last one for now.
+                test.push(`${test.length + 1}\t${user.utterance.toLowerCase()}\t${dialog.alltk[alltk.size - 1]}`);
                 annotated.push(dialog);
                 console.log(dialog.alltk);
             }
@@ -512,6 +521,9 @@ class CsqaTranslater {
         }
         console.log(`${annotated.length} sentences correctly anntated in ${canonical}`);
         console.log(`${skipped.length} sentences skipped in ${canonical}`);
+        await util.promisify(fs.writeFile)(
+            path.join(this._output_dir, canonical, 'eval-synthetic', `annotated.tsv`), test.join('\n'), 
+            { encoding: 'utf8' });
     }
 
     async run() {
