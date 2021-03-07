@@ -112,7 +112,7 @@ class CsqaTranslater {
                 values: lf[idx+1]
             }];
         }
-        parsed.table = `@org.wikidata.${canonical}()`;
+        parsed.table = `@org.wikidata . ${canonical} ( )`;
         parsed.type = 'set';
         parsed.op = 'set';
         lf.splice(idx + 1, 1);
@@ -193,7 +193,7 @@ class CsqaTranslater {
             property: lf[idx + 1],
             values: reverse ? lf[idx + 2] : lf[idx + 3]
         }];
-        parsed.table = `@org.wikidata.${canonical}()`;
+        parsed.table = `@org.wikidata . ${canonical} ( )`;
         parsed.projection = [lf[idx + 1]];
         parsed.type = 'set';
         parsed.op = reverse ? 'reverse_pretype' : 'pretype';
@@ -410,7 +410,7 @@ class CsqaTranslater {
     }
 
     async _buildFilter(filters) {
-        let query = '(';
+        let query = '( ';
         for (const filter of filters) {
             if(Array.isArray(filter)) {
                 query += `${await this._buildFilter(filter)}`;
@@ -419,11 +419,11 @@ class CsqaTranslater {
                     const property = filter.property === 'id' ? 'id' : argnameFromLabel(this._propertyLabels[filter.property]);
                     const values = this._entityLabels[filter.values];
                     if (values) {
-                        query += `${property} ${filter.negate ?'!=':'=='} "${values.toLowerCase()}"`;
+                        query += `${property} ${filter.negate ?'!=':'=~'} " ${values.toLowerCase()} "`;
                     } else {
                         const label = await getItemLabel(filter.values);
                         if (label) {
-                            query += `${property} ${filter.negate ?'!=':'=='} "${label.toLowerCase()}"`;
+                            query += `${property} ${filter.negate ?'!=':'=~'} " ${label.toLowerCase()} "`;
                             this._entityLabels[filter.values] = label;
                         } else {
                             // Since we won't get correct answer, ignore this for now.
@@ -433,7 +433,7 @@ class CsqaTranslater {
                 } else if (filter.num  && filter.op && filter.set) { // Incomplete as compare func not yet implemented.
                     assert(filter.num.op === 'count');
                     assert(filter.set.op === 'count');
-                    query += `(${await this._buildThingTalk(filter.set)}) ${filter.op} (${await this._buildThingTalk(filter.num)})`
+                    query += `( ${await this._buildThingTalk(filter.set)}) ${filter.op} (${await this._buildThingTalk(filter.num)} )`
                 } else {
                     console.log(filter);
                     throw Error(`Unknown filter:`);
@@ -451,7 +451,7 @@ class CsqaTranslater {
                 }
             }
         }
-        query += ')';
+        query += ' )';
         return query;
     }
 
@@ -460,7 +460,7 @@ class CsqaTranslater {
         for (const item of projection) {
             query.push(argnameFromLabel(this._propertyLabels[item]));
         }
-        return `[${query.join(',')}]`;
+        return `[ ${query.join(' , ')} ]`;
     }
 
 
@@ -470,11 +470,11 @@ class CsqaTranslater {
         let query = `${projection} of ${lf.table} filter ${filter}`;
         if (lf.op === 'count') {
             assert(lf.type === 'num');
-            query = `count(${query})`;
+            query = `count ( ${query} )`;
         }
         if(lf.op === 'in') {
             assert(lf.type === 'bool');
-            query = `count(${query})`;
+            query = `count ( ${query} )`;
         }
         return query;
     }
