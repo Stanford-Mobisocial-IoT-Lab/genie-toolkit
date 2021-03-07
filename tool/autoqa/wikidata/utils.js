@@ -352,9 +352,6 @@ async function getEquivalent(id) {
     return result.map((r) => r.class.value.slice('http://www.wikidata.org/entity/'.length));
 }
 
-/**
- * 
- */
 async function getType(domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault) {
     if (property in PROPERTY_TYPE_OVERRIDE)
         return PROPERTY_TYPE_OVERRIDE[property];
@@ -369,14 +366,10 @@ async function getType(domainLabel, property, propertyLabel, schemaorgProperties
         if (elemType.isEntity && elemType.type === 'tt:picture')
             return new Type.Array(elemType);
 
-        // TODO: decide if an property has an array type based on data
         return elemType;
     }
 }
 
-/**
- * 
- */
 async function getElemType(domainLabel, property, propertyLabel, schemaorgProperties, setDefault) {
     if (PROPERTY_TYPE_SAME_AS_SUBJECT.has(property))
         return new Type.Entity(`org.wikidata:${snakecase(domainLabel)}`);
@@ -473,9 +466,6 @@ async function getElemType(domainLabel, property, propertyLabel, schemaorgProper
     }
 }
 
-/**
- * 
- */
 function argnameFromLabel(label) {
     return snakecase(label)
         .replace(/'/g, '') // remove apostrophe
@@ -488,18 +478,12 @@ function argnameFromLabel(label) {
         .replace(/[\W]+/g, '');
 }
 
-/**
- * 
- */
 function getElementType(type) {
     if (type.isArray)
         return getElementType(type.elem);
     return type;
 }
 
-/**
- * 
- */
 async function loadSchemaOrgManifest(schemaorgManifest, schemaorgProperties) {
     if (schemaorgManifest) {
         const library = ThingTalk.Grammar.parse(await util.promisify(fs.readFile)(schemaorgManifest, { encoding: 'utf8' }));

@@ -16,7 +16,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author: Silei Xu <silei@cs.stanford.edu>
+// Author: Naoki Yamamura <yamamura@cs.stanford.edu>
 "use strict";
 
 const fs = require('fs');

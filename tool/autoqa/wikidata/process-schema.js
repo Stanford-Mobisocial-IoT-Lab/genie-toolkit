@@ -41,7 +41,6 @@ import {
     getRangeConstraint,
     getSchemaorgEquivalent,
     getClasses,
-    // New additions below
     getType,
     getElementType,
     argnameFromLabel,
@@ -49,18 +48,8 @@ import {
 } from './utils';
 
 import {
-    PROPERTY_TYPE_OVERRIDE,
-    MANUAL_PROPERTY_CANONICAL_OVERRIDE, // only this was used
-    PROPERTY_FORCE_ARRAY,
-    PROPERTY_FORCE_NOT_ARRAY,
-    PROPERTY_TYPE_SAME_AS_SUBJECT
+    MANUAL_PROPERTY_CANONICAL_OVERRIDE,
 } from './manual-annotations';
-
-function getElementType(type) {
-    if (type.isArray)
-        return getElementType(type.elem);
-    return type;
-}
 
 async function retrieveProperties(domain, properties) {
     let list = properties.includes('default') ? await getPropertyList(domain) : [];
@@ -237,7 +226,7 @@ export function initArgparse(subparsers) {
         });
         parser.add_argument('--properties', {
             nargs: '+',
-            required: false,
+            required: true,
             help: 'properties to include for each domain, properties are split by comma (no space);\n' +
                 'use "default" to include properties included in P1963 (properties of this type);\n' +
                 'exclude a property by placing a minus sign before its id (no space)'
@@ -293,23 +282,13 @@ export async function execute(args) {
     }
 
     const propertiesByDomain = {};
-    if (args.properties) {
-        // if provided, property lists should match the number of domains
-        assert(Array.isArray(args.properties) && args.properties.length === domains.length);
-        for (let i = 0; i < domains.length; i++) {
-            const domain = domains[i];
-            const properties = args.properties[i].split(',');
-            propertiesByDomain[domain] = await retrieveProperties(domain, properties);
-        }
-    } else {
-        // from next branch assuming this is original code which we can ignore.    
-        //for (let domain of domains)
-            //propertiesByDomain[domain] = await getPropertyList(domain);
-        const schemaProcessor = new SchemaProcessor(
-            domains, domainCanonicals, propertiesByDomain, requiredPropertiesByDomain, args.output, args.entities,
-            args.manual, args.wikidata_labels, args.schemaorg_manifest, args.parameter_datasets
-        );
-        schemaProcessor.run();
+    
+    // if provided, property lists should match the number of domains
+    assert(Array.isArray(args.properties) && args.properties.length === domains.length);
+    for (let i = 0; i < domains.length; i++) {
+        const domain = domains[i];
+        const properties = args.properties[i].split(',');
+        propertiesByDomain[domain] = await retrieveProperties(domain, properties);
     }
     const schemaProcessor = new SchemaProcessor(
         domains, domainCanonicals, propertiesByDomain, requiredPropertiesByDomain, args.output, args.entities,

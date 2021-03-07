@@ -38,6 +38,7 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P1352': Type.Number, // ranking
     'P1303': new Type.Array(new Type.Entity('org.wikidata:musical_instrument')), // instrument
     'P264': new Type.Array(new Type.Entity('org.wikidata:record_label')), // record_label
+    'P361': new Type.Array(Type.String), // part_of
     'P398': new Type.Array(new Type.Entity('org.wikidata:star')), // child_astronomical_body
     'P397': new Type.Array(new Type.Entity('org.wikidata:star')), // parent_astronomical_body
     'P2227': Type.Number, // metallicity
@@ -45,8 +46,8 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P942': new Type.Entity('org.wikidata:song'), // theme_music
     // From country domain
     'P36': new Type.Entity('org.wikidata:city'), // capital
-    'P190': new Type.Array(new Type.Entity('org.wikidata:city')), // sister city
     'P206': new Type.Array(new Type.Entity('org.wikidata:body_of_water')), // located_in_or_next_to_body_of_water
+    'P190': new Type.Array(new Type.Entity('org.wikidata:city')), // sister city
     'P610': Type.Location, // highest point
     'P1589': Type.Location, // lowest point
     'P38': Type.Currency,
@@ -108,6 +109,14 @@ const PROPERTY_TYPE_OVERRIDE = {
     'P608': new Type.Entity('org.wikidata:event'), // exhibition history, found 1 values
     'P805': new Type.Entity('org.wikidata:topic'), // subject of
     'P3179': Type.Location, // territory overlaps
+    'P159': Type.Location, // headquarters location, found 2073 values
+    'P276': Type.Location, // location, found 386 values
+    'P840': Type.Location, // narrative location, found 3893 values
+    'P291': Type.Location, // place of publication, found 95 values
+    'P183': Type.Location, // endemic to, found 327 values
+    'P915': Type.Location, // filming location, found 2684 values
+    'P1071': Type.Location, // location of final assembly, found 299 values
+    'P189': Type.Location, // location of discovery, found 13 values
     // From city domain
     'P1383': Type.Location, // contains settlement
     'P2439': new Type.Entity('tt:iso_lang_code'), // language
@@ -176,7 +185,7 @@ const PROPERTY_FORCE_ARRAY = new Set([
     'P800', // notable_work (this will be just array of string, wikidata doesn't have 'creative work'
     'P37', // official language
     'P6', // head of government
-    //'P150', // contains_administrative_territorial_entity,
+    'P150', // contains_administrative_territorial_entity,
     'P421', // time zone
     'P170', // creator
     'P58', // screenwriter

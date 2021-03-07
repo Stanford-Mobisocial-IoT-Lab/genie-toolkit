@@ -1,3 +1,22 @@
+// -*- mode: js; indent-tabs-mode: nil; js-basic-offset: 4 -*-
+//
+// This file is part of Genie
+//
+// Copyright 2019-2020 The Board of Trustees of the Leland Stanford Junior University
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author: Naoki Yamamura <yamamura@cs.stanford.edu>
 "use strict";
 
 
@@ -47,37 +66,38 @@ class CsqaConverter {
         const basePath = path.join(this._input_dir, this._dataset)
         let cnt = 0;
         const qaPairs = [];
-        for (const file of (await this. _readSync(fs.readdir, basePath))) {
-            const dialog = JSON.parse((await this. _readSync(fs.readFile, path.join(basePath, file))));
-            let userTurn;
-            for (const turn in dialog) {
-                const speaker = dialog[turn].speaker;
-                if (speaker === 'USER') {
-                    userTurn = dialog[turn];
-                } else {
-                    let found = false;
-                    for (let active of dialog[turn].active_set) {
-                        active = active.replace(/[^0-9PQ,|]/g, '').split(',');
-                        const entities = active[0].split('|').concat(active[2].split('|'))
-                        for (const entity of entities) {
-                            if (this._instances.has(entity) &&
-                                QUESTION_TYPES.has(userTurn['question-type']) &&
-                                userTurn.description &&
-                                !userTurn.description.toLowerCase().includes('indirect') &&
-                                !userTurn.description.toLowerCase().includes('incomplete')&&
-                                dialog[turn].true_lf.length > 0) {
-                                qaPairs.push({
-                                    file: file,
-                                    turn: turn - 1, // count from start of the turn (i.e. user turn)
-                                    user: userTurn,
-                                    system: dialog[turn],
-                                });
-                                cnt++;
-                                found = true;
-                                break; // one entity set is sufficient for positive case.
+        for (const dir of (await this. _readSync(fs.readdir, basePath))) {
+            for (const file of (await this. _readSync(fs.readdir, path.join(basePath, dir)))) {
+                const dialog = JSON.parse((await this. _readSync(fs.readFile, path.join(basePath, dir, file))));
+                let userTurn;
+                for (const turn in dialog) {
+                    const speaker = dialog[turn].speaker;
+                    if (speaker === 'USER') {
+                        userTurn = dialog[turn];
+                    } else {
+                        let found = false;
+                        for (let active of dialog[turn].active_set) {
+                            active = active.replace(/[^0-9PQ,|]/g, '').split(',');
+                            const entities = active[0].split('|').concat(active[2].split('|'))
+                            for (const entity of entities) {
+                                if (this._instances.has(entity) &&
+                                    QUESTION_TYPES.has(userTurn['question-type']) &&
+                                    userTurn.description &&
+                                    !userTurn.description.toLowerCase().includes('indirect') &&
+                                    !userTurn.description.toLowerCase().includes('incomplete')) {
+                                    qaPairs.push({
+                                        file: file,
+                                        turn: turn - 1, // count from start of the turn (i.e. user turn)
+                                        user: userTurn,
+                                        system: dialog[turn],
+                                    });
+                                    cnt++;
+                                    found = true;
+                                    break; // one entity set is sufficient for positive case.
+                                }
                             }
+                            if (found) break; // break +1 outer loop as well.
                         }
-                        if (found) break; // break +1 outer loop as well.
                     }
                 }
             }
@@ -112,7 +132,7 @@ class CsqaConverter {
             } else {
                 // Since we won't get correct answer, ignore this for now.
                 console.log(`Not found: ${qid}`);
-                return "";
+                return;
             }
         }
         return value.toLowerCase();
@@ -125,22 +145,28 @@ class CsqaConverter {
 
     async getSingleFilter(activeSet, negate) {
         const param = await this.getArgName(activeSet[0], activeSet[1]);
-        const ttValue = new Ast.Value.String(await this.getArgValue(activeSet[0]));
+        const arg = await this.getArgValue(activeSet[0])
+        if (!arg) return;
+
+        const ttValue = new Ast.Value.String(arg);
         const exp = new Ast.BooleanExpression.Atom(null, param, '=~', ttValue);
         return negate ? new Ast.BooleanExpression.Not(null, exp) : exp;
     }
 
     async getMultiFilter(activeSet, negate) {
-        const filterClauses = [];
-        filterClauses.push(await this.getSingleFilter(activeSet.slice(0, 3)));
-        filterClauses.push(await this.getSingleFilter(activeSet.slice(3), negate));
-        return filterClauses;
+        const filter1 = await this.getSingleFilter(activeSet.slice(0, 3));
+        const filter2 = await this.getSingleFilter(activeSet.slice(3), negate);
+        if (!filter1 || !filter2) return;
+        return [filter1, filter2];
     }
 
     // ques_type_id=1
     async simpleQuestion(canonical, activeSet) {
+        const exp = await this.getSingleFilter(activeSet);
+        if (!exp) return;
+
         const invocationTable = await this.getTable(canonical);
-        const filter = new Ast.BooleanExpression.And(null, [(await this.getSingleFilter(activeSet))]);
+        const filter = new Ast.BooleanExpression.And(null, [exp]);
         const filterTable = new Ast.FilterExpression(null, invocationTable, filter, null);
         // Return projected table.
         return (new Ast.ProjectionExpression(null, filterTable, [(await this.getArgName(activeSet[2], activeSet[1]))], [], []));
@@ -165,13 +191,19 @@ class CsqaConverter {
         let filter;
         switch(setOpChoice) {
             case 1: // OR
-                filter = new Ast.BooleanExpression.Or(null, (await this.getMultiFilter(activeSet)));
+                filter = await this.getMultiFilter(activeSet);
+                if (!filter) return;
+                filter = new Ast.BooleanExpression.Or(null, filter);
                 break;
             case 2: // AND
-                filter = new Ast.BooleanExpression.And(null, (await this.getMultiFilter(activeSet)));
+                filter = await this.getMultiFilter(activeSet);
+                if (!filter) return;
+                filter = new Ast.BooleanExpression.And(null, filter);
                 break;
             case 3: // Difference
-                filter = new Ast.BooleanExpression.And(null, (await this.getMultiFilter(activeSet, true)));
+                filter = await this.getMultiFilter(activeSet, true);
+                if (!filter) return;
+                filter = new Ast.BooleanExpression.And(null, filter);
                 break;
             default:
                 throw new Error(`Unknown set_op_choice: ${setOpChoice}`);
@@ -192,7 +224,9 @@ class CsqaConverter {
     async quantitativeQuestionsSingleEntity(canonical, activeSet, countQuesSubType) {
         switch(countQuesSubType) {
             case 1: // Quantitative (count) single entity
-                return new Ast.AggregationExpression(null, await this.simpleQuestion(canonical, activeSet), '*', 'count', null);
+                const exp = await this.simpleQuestion(canonical, activeSet);
+                if (!exp) return;
+                return new Ast.AggregationExpression(null, exp, '*', 'count', null);
             case 2: // Quantitative (min/max) single entity
                 return; // not supprted in thingtalk.
             default:
@@ -207,7 +241,9 @@ class CsqaConverter {
                 return new Ast.AggregationExpression(null, await this.setBasedQuestion(canonical, activeSet, setOpChoice), '*', 'count', null);
             case 2: // Quantitative (count) multiple entity
                 if (activeSet[1] === activeSet[4]) {
-                    return new Ast.AggregationExpression(null, await this.simpleQuestion(canonical, activeSet), '*', 'count', null);
+                    const exp = await this.simpleQuestion(canonical, activeSet);
+                    if (!exp) return;
+                    return new Ast.AggregationExpression(null, exp, '*', 'count', null);
                 } else {
                     return new Ast.AggregationExpression(null, await this.setBasedQuestion(canonical, activeSet, setOpChoice), '*', 'count', null);
                 }
@@ -263,22 +299,12 @@ class CsqaConverter {
                 throw new Error(`Unknown ques_type_id: ${user.ques_type_id}`);
         }
         if (tk) {
-            const _schemaRetriever = new ThingTalk.SchemaRetriever(
-                null,
-                null,
-                true);
-            await ThingTalk.Syntax.parse(`${tk.prettyprint()};`).typecheck(_schemaRetriever).then(
-                    (program) => {
-                    //convert from ast to sparql
-                    let generated = Helper.toSparql(program);
-                }
-            );
             return tk.prettyprint();
         } 
     }
 
     async _conveter(canonical, dialogs) {
-        const test = [];
+        const dataset = [];
         const annotated = [];
         const skipped = [];
         for (const dialog of dialogs) {
@@ -287,16 +313,16 @@ class CsqaConverter {
 
             if (tk) {
                 dialog.tk = tk;
-                test.push(`${test.length + 1}\t${user.utterance.toLowerCase()}\t${dialog.tk}`);
+                dataset.push(`${dataset.length + 1}\t${user.utterance.toLowerCase()}\t${dialog.tk}`);
                 annotated.push(dialog);
             } else {
                 skipped.push(dialog);
             }
         }
-        console.log(`${annotated.length} sentences correctly anntated in ${canonical}`);
+        console.log(`${annotated.length} sentences anntated in ${canonical}`);
         console.log(`${skipped.length} sentences skipped in ${canonical}`);
         await util.promisify(fs.writeFile)(
-            path.join(this._output_dir, canonical, 'eval-synthetic', `annotated.tsv`), test.join('\n'), 
+            path.join(this._output_dir, canonical, `${this._dataset}.tsv`), dataset.join('\n'), 
             { encoding: 'utf8' });
     }
 

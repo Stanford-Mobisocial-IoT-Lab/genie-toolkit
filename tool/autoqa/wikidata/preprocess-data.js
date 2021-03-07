@@ -1,3 +1,22 @@
+// -*- mode: js; indent-tabs-mode: nil; js-basic-offset: 4 -*-
+//
+// This file is part of Genie
+//
+// Copyright 2019-2020 The Board of Trustees of the Leland Stanford Junior University
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author: Naoki Yamamura <yamamura@cs.stanford.edu>
 "use strict";
 
 const fs = require('fs');
@@ -60,9 +79,8 @@ class ParamDatasetGenerator {
             let fileId = `org.wikidata:${(await argnameFromLabel(label))}`;
             let isEntity = false;
 
-            // If we can map to some type, then update the fileId
+            // If we cannot map to some type, treat it as string
             if (type) {
-                // Maps to entity
                 type = getElementType(type);
                 
                 if (type.isEntity) {
@@ -124,26 +142,26 @@ class ParamDatasetGenerator {
                 filteredDomainProperties.push(property);
                 // Dump propety data
                 let dataPath;
-                if (!isEntity) {
-                    dataPath = `string\t${this._locale}\t${fileId}\t${path.relative(path.join(this._output_dir, canonical), outputPath)}`;
-                    let outData = data.join(os.EOL).concat(os.EOL);
-                    await util.promisify(fs.appendFile)(outputPath, outData, { encoding: 'utf8' });
-                } else {
+                if (isEntity) {
                     let outData = { result: 'ok', data };
-                    dataPath = `entity\t${this._locale}\t${fileId}\t${path.relative(path.join(this._output_dir, canonical), outputPath)}`;
+                    dataPath = `entity\t${this._locale}\t${fileId}\t${path.relative(path.join(this._output_dir, canonical), outputPath)}\n`;
                     if (datasetPathes.has(dataPath)) {
                         outData = JSON.parse(await this. _readSync(fs.readFile, outputPath));
-                        // We should just keep unique value
+                        // Just keep unique values
                         outData['data'] = Array.from(new Set(outData['data'].concat(data)));
                     }
                     await util.promisify(fs.writeFile)(outputPath, JSON.stringify(outData, undefined, 2), { encoding: 'utf8' });
+                } else {
+                    dataPath = `string\t${this._locale}\t${fileId}\t${path.relative(path.join(this._output_dir, canonical), outputPath)}\n`;
+                    let outData = data.join(os.EOL).concat(os.EOL);
+                    await util.promisify(fs.appendFile)(outputPath, outData, { encoding: 'utf8' });
                 }
                 datasetPathes.add(dataPath);
             }
         }
             await Promise.all([
                 util.promisify(fs.writeFile)(this._propery_pathes[6],
-                    Array.from(datasetPathes).join('\n'), { encoding: 'utf8' }),
+                    Array.from(datasetPathes).join(''), { encoding: 'utf8' }),
                 util.promisify(fs.writeFile)(this._propery_pathes[5], 
                     filteredDomainProperties.join(','), { encoding: 'utf8' })
             ]);    
@@ -208,7 +226,6 @@ class ParamDatasetGenerator {
                 for (const [key, value] of Object.entries(data.value)) {
                     if (key in filteredProperties) {
                         if (!(key in properties)) {
-                            console.log(`${Object.keys(properties).length} properties in ${canonical} domain (found ${key}).`);
                             properties[key] = [];
                         }
                         properties[key] = Array.from(new Set(properties[key].concat(value)));
@@ -248,7 +265,6 @@ class ParamDatasetGenerator {
                         }
                     }
                     this._instances.add(String(data.key));
-                    console.log(`${this._instances.size} instances in ${canonical} domain with ${Object.keys(this._properties).length} properties (found ${data.key}).`);
                 }
             }
         });
@@ -277,6 +293,13 @@ class ParamDatasetGenerator {
     }
 
     async run() {
+        // Required CSQA Wikidata json files
+        assert(fs.existsSync(path.join(this._input_dir, 'filtered_property_wikidata4.json')));
+        assert(fs.existsSync(path.join(this._input_dir, `items_wikidata_n.json`)));
+        assert(fs.existsSync(path.join(this._input_dir, `wikidata_short_1.json`)));
+        assert(fs.existsSync(path.join(this._input_dir, `wikidata_short_2.json`)));
+        assert(fs.existsSync(path.join(this._input_dir, `comp_wikidata_rev.json`)));
+
         await loadSchemaOrgManifest(this._schemaorgManifest, this._schemaorgProperties);
         for (const idx in this._domains) {
             this._propery_pathes = [

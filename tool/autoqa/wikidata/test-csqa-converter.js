@@ -1,6 +1,23 @@
-/**
- * node --require ts-node/register test-csqa-converter
- */
+// -*- mode: js; indent-tabs-mode: nil; js-basic-offset: 4 -*-
+//
+// This file is part of Genie
+//
+// Copyright 2019-2020 The Board of Trustees of the Leland Stanford Junior University
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author: Naoki Yamamura <yamamura@cs.stanford.edu>
+"use strict";
 import assert from 'assert';
 
 import {
@@ -70,7 +87,6 @@ const TEST_CASES = [
     }},
     '[legislative_body] of @org.wikidata.country() filter id =~ "france"'],
     // Test 3: 2.2. Secondary question, Object based question
-    // Maybe skip. Property mostly belong to another table.
     [{  user: {
             ques_type_id: 2,
             sec_ques_sub_type: 1,
@@ -93,7 +109,6 @@ const TEST_CASES = [
     }},
     '[shares_border_with] of @org.wikidata.country() filter id =~ "thailand" || shares_border_with =~ "pontoglio"'],
     // Test 5: 4.1. Set-based question OR
-    // Maybe skip. Second condition should be from anothe table.
     [{  user: {
             set_op_choice: 1,
             ques_type_id: 4,
@@ -115,7 +130,6 @@ const TEST_CASES = [
     }},
     '[shares_border_with, country_of_citizenship] of @org.wikidata.country() filter id =~ "france" && country_of_citizenship =~ "charles iii, duke of parma"'],
     // Test 7: 4.2. Set-based question AND
-    // Maybe skip. Another type of Object based question like Test 2.
     [{  user: {
             set_op_choice: 2,
             ques_type_id: 4,
@@ -138,7 +152,6 @@ const TEST_CASES = [
     }},
     '[diplomatic_relation] of @org.wikidata.country() filter id =~ "ireland" && !(id =~ "canada")'],
     // Test 9: 4.3. Set-based question Difference
-    // Maybe skip. Aside from second query should be from another table, not sure if set exclusions are supported.
     [{  user: {
             set_op_choice: 3,
             ques_type_id: 4,
@@ -162,8 +175,7 @@ const TEST_CASES = [
     }},
     'count([diplomatic_relation] of @org.wikidata.country() filter id =~ "argentina")'],
     // Test 11: 8.1. Comparative and Quantitative questions (involving multiple(2) entities), Quantitative with Logical Operators
-    // Maybe skip. Does thinkgtalk support way to filter property by entity type?
-    // Also second filter should be from another table ("Georgia state not country")
+    // Note: second filter should be from another table ("Georgia state not country")
     [{  user: {
             set_op: 1,
             ques_type_id: 8,
@@ -177,7 +189,6 @@ const TEST_CASES = [
     }},
     'count([member_of] of @org.wikidata.country() filter id =~ "serbia" && member_of =~ "georgia")'],
     // Test 12: 8.1. Comparative and Quantitative questions (involving multiple(2) entities), Quantitative with Logical Operators
-    // Maybe skip. Second filter should be joined from another table.
     [{  user: {
             set_op: 2,
             ques_type_id: 8,
@@ -191,7 +202,6 @@ const TEST_CASES = [
     }},
     'count([main_subject] of @org.wikidata.country() filter id =~ "canada" || main_subject =~ "corvey")'],
     // Test 13: 8.2. Comparative and Quantitative questions (involving multiple(2) entities), Quantitative (count) multiple entity
-    // Maybe skip. Need filter by two entity types (Q15617994, Q1048835).
     [{  user: {
             set_op: 2,
             ques_type_id: 8,
@@ -222,7 +232,6 @@ async function test(index) {
 
 export default async function main() {    
     for (let i = 0; i < TEST_CASES.length; i++) {
-    //for (let i = 0; i < 1; i++) {    
         console.log("TEST CASE #" + (i + 1));
         await test(i);
     }
