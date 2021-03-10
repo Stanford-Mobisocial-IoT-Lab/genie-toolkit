@@ -49,6 +49,13 @@ dataset @org.thingpedia.builtin.thingengine.builtin language "en" {
     #[id=53269129]
     #[name="GetRandomIntegerWithLowWithHigh"];
 
+    query (p_device : Entity(tt:device)) := @org.thingpedia.builtin.thingengine.builtin.device_info(device=p_device)
+    #_[utterances=["information about ${p_device}",
+                   "help with ${p_device}",
+                   "${p_device} help",
+                   "${p_device} documentation"]]
+    #[name="DeviceInfoWithDevice"];
+
     action (p_message :String) := @org.thingpedia.builtin.thingengine.builtin.say(message=p_message)
     #_[utterances=["send me a message ${p_message:const}",
                    "tell me $p_message",

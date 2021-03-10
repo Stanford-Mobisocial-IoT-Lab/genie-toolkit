@@ -4,6 +4,7 @@ class @org.thingpedia.builtin.thingengine.builtin
 #_[name="Miscellaneous Interfaces"]
 #_[description="Commands that are always available and don't belong to any specific device or account. Mostly related to time and randomness, because the universe is chaos and those always there. Also debugging."]
 #_[canonical="miscellaneous interfaces"]
+#_[help="I can give you the current date and time, pick random numbers, and help you set various preferences."]
 #[repository="https://github.com/stanford-oval/genie-toolkit"]
 #[subcategory="service"]
 #[license="Apache-2.0"]
@@ -101,36 +102,56 @@ class @org.thingpedia.builtin.thingengine.builtin
   #[doc="get the user's preferred name (a setting)"]
   #[confirm=false];
 
-  /*
-  monitorable list query device(out id : Entity(tt:device)
-                                #_[canonical={
-                                   base=["name"],
-                                   passive_verb=["named #", "called #"],
-                                }],
-                                out description : String
-                                #_[canonical={
-                                   base=["description"]
-                                }]
-                                #[string_values="tt:short_free_text"]
-                                #[filterable=false],
-                                out category : Enum(service, media, social_network, communication, home, health, data_management)
-                                #_[canonical={
-                                   base=["category"],
-                                   adjective=["#"],
-                                   preposition=["in the # category"]
-                                }],
-                                out website : Entity(tt:url)
-                                #_[canonical={
-                                   base=["website", "link", "url"]
-                                }]
-                                #[filterable=false])
-  #_[canonical=["device", "skill", "thingpedia device", "supported skill"]]
-  #_[confirmation="Thingpedia devices"]
-  #_[formatted=[{type="text",text="${random}"}]]
-  #[doc="list supported Thingpedia devices"]
-  #[poll_interval=1day]
+  // XXX this is temporary, long term we'll merge this with "list available skills"
+  query device_info(in req id : Entity(tt:device)
+                    #_[canonical={
+                       base=["name"],
+                       passive_verb=["named #", "called #"],
+                    }],
+                    out help : String
+                    #_[canonical={
+                       base=["help", "documentation"]
+                    }]
+                    #[string_values="tt:long_free_text"]
+                    #[filterable=false],
+                    out description : String
+                    #_[canonical={
+                       base=["description"]
+                    }]
+                    #[string_values="tt:long_free_text"]
+                    #[filterable=false],
+                    out category : Enum(service, media, social_network, communication, home, health, data_management)
+                    #_[canonical={
+                       base=["category"],
+                       adjective=["#"],
+                       preposition=["in the # category"]
+                    }],
+                    out thingpedia_url : Entity(tt:url)
+                    #_[canonical={
+                       base=["thingpedia page", "thingpedia link"]
+                    }]
+                    #[filterable=false],
+                    out website : Entity(tt:url)
+                    #_[canonical={
+                       base=["website", "link", "url"]
+                    }]
+                    #[filterable=false],
+                    out issue_tracker : Entity(tt:url)
+                    #_[canonical={
+                       base=["issue tracking website", "bug report url"]
+                    }]
+                    #[filterable=false])
+  #_[canonical=["information about a device", "information about a skill",
+                "information about a thingpedia device",
+                "information about a supported skill",
+                "help about a skill", "skill help", "skill documentation", "help with a skill"]]
+  #_[result=["with ${id} , ${help} . visit the thingpedia page for additional information",
+             "the description of ${id} is ${description} . visit the thingpedia page for additional information"]]
+  #_[formatted=[{type="rdl",displayTitle="${id}",webCallback="${thingpedia_url}"}]]
+  #[doc="query info about supported Thingpedia devices"]
   #[confirm=false];
 
+  /*
   list query commands(out id : Entity(tt:command_id),
                       out device: Entity(tt:device)
                       #_[canonical={
