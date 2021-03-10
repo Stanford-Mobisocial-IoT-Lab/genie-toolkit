@@ -33,11 +33,12 @@ const Ast = ThingTalk.Ast;
 const I18N = require('../../../lib/i18n');
 const tokenizer = I18N.get('en-US' ).getTokenizer();
 
-import {serializePrediction} from '../../../lib/utils/thingtalk';
+import { serializePrediction } from '../../../lib/utils/thingtalk';
 import {
     getItemLabel,
     argnameFromLabel,
 } from './utils';
+import { makeDummyEntities } from "../../../lib/utils/entity-utils";
 
 const QUESTION_TYPES = new Set(
     ['Simple Question (Direct)',
@@ -304,15 +305,11 @@ class CsqaConverter {
 
             if (tk) {
                 try {
-                    const tokens = tokenizer.tokenize(tk.prettyprint());
-                    const tokenizedSentence = tokens.tokens.join(" ");
-                    let sentence = serializePrediction(tk, tokenizedSentence, tokens.entities, { locale: 'en-US' }).join(' ');
-                    for (const [key, value] of Object.entries(tokens.entities)) {
-                        sentence = sentence.replace(key, `" ${value} "`);
-                    }
-                    dialog.tk = sentence;
-                    const utterance = user.utterance.toLowerCase();
-                    dataset.push(`${dataset.length + 1}\t${utterance}\t${dialog.tk}`);
+                    const preprocessed = tokenizer.tokenize(user.utterance).join(' ');
+                    const entities = makeDummyEntities(preprocessed);
+                    const thingtalk = serializePrediction(tk, preprocessed, entities, { locale: 'en-US' }).join(' ');
+                    dialog.tk = thingtalk;
+                    dataset.push(`${dataset.length + 1}\t${preprocessed}\t${thingtalk}`);
                     annotated.push(dialog);
                 } catch (e) {
                     // Mostly non-English alphabet
