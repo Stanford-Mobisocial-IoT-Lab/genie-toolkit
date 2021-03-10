@@ -75,20 +75,18 @@ export interface AbstractDialogueLoop {
  */
 export default class ExecutionDialogueAgent extends AbstractDialogueAgent<undefined> {
     private _engine : Engine;
-    private _thingpedia : Tp.BaseClient;
     private _platform : Tp.BasePlatform;
     private _dlg : AbstractDialogueLoop;
     private _executor : StatementExecutor;
 
     constructor(engine : Engine, dlg : AbstractDialogueLoop, debug : boolean) {
-        super(engine.schemas, {
+        super(engine.thingpedia, engine.schemas, {
             debug: debug,
             locale: engine.platform.locale,
             timezone: engine.platform.timezone
         });
 
         this._engine = engine;
-        this._thingpedia = engine.thingpedia;
         this._platform = engine.platform;
         this._executor = new StatementExecutor(engine);
         this._dlg = dlg;
@@ -122,7 +120,7 @@ export default class ExecutionDialogueAgent extends AbstractDialogueAgent<undefi
     }
 
     protected async tryConfigureDevice(kind : string) : Promise<DeviceInfo|null> {
-        const factories = await this._thingpedia.getDeviceSetup([kind]);
+        const factories = await this._tpClient.getDeviceSetup([kind]);
         const factory = factories[kind];
         if (!factory) {
             await this._dlg.replyInterp(this._("You need to enable ${device} before you can use that command."), {
@@ -269,7 +267,7 @@ export default class ExecutionDialogueAgent extends AbstractDialogueAgent<undefi
                 return appLauncher.listApps();
         }
 
-        const { data: tpCandidates, meta } = await this._thingpedia.lookupEntity(entityType, entityDisplay);
+        const { data: tpCandidates, meta } = await this._tpClient.lookupEntity(entityType, entityDisplay);
         if (tpCandidates.length > 0)
             return tpCandidates;
 
@@ -335,7 +333,7 @@ export default class ExecutionDialogueAgent extends AbstractDialogueAgent<undefi
         else if (currentLocation)
             around = { latitude: currentLocation.lat, longitude: currentLocation.lon };
 
-        const candidates = await this._thingpedia.lookupLocation(searchKey, around);
+        const candidates = await this._tpClient.lookupLocation(searchKey, around);
 
         // ignore locations larger than a city
         const mapped = candidates.filter((c) => c.rank >= 16).map((c) => {

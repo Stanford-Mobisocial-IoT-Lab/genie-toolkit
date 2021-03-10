@@ -51,13 +51,12 @@ export interface SimulationDialogueAgentOptions {
  */
 export default class SimulationDialogueAgent extends AbstractDialogueAgent<ThingTalkSimulatorState> {
     private _executor : StatementSimulator;
-    private _thingpedia : Tp.BaseClient;
     private _rng : () => number;
     private _database ?: SimulationDatabase;
     private _interactive : boolean;
 
     constructor(options : SimulationDialogueAgentOptions) {
-        super(options.schemaRetriever!, {
+        super(options.thingpediaClient!, options.schemaRetriever!, {
             locale: options.locale,
             debug: false,
             timezone: 'America/Los_Angeles',
@@ -71,7 +70,6 @@ export default class SimulationDialogueAgent extends AbstractDialogueAgent<Thing
             overrides: options.overrides
         });
 
-        this._thingpedia = options.thingpediaClient!;
         this._rng = options.rng;
         this._database = options.database;
         this._interactive = options.interactive;
@@ -132,7 +130,7 @@ export default class SimulationDialogueAgent extends AbstractDialogueAgent<Thing
         if (lastLocation)
             around = { latitude: lastLocation.lat, longitude: lastLocation.lon };
         */
-        const candidates = await this._thingpedia.lookupLocation(searchKey);
+        const candidates = await this._tpClient.lookupLocation(searchKey);
 
         // ignore locations larger than a city
         const locations = candidates.filter((c) => c.rank >= 16).map((c) => {
@@ -160,7 +158,7 @@ export default class SimulationDialogueAgent extends AbstractDialogueAgent<Thing
 
         // in interactive mode, we query thingpedia for real
         if (this._interactive) {
-            const { data: candidates, } = await this._thingpedia.lookupEntity(entityType, entityDisplay);
+            const { data: candidates, } = await this._tpClient.lookupEntity(entityType, entityDisplay);
             return candidates;
         } else {
             // return nothing...
