@@ -28,10 +28,13 @@ const path = require('path');
 const assert = require('assert');
 
 const ThingTalk = require('thingtalk');
+const Tp  = require('thingpedia');
 const Ast = ThingTalk.Ast;
+const I18N = require('../../../lib/i18n');
+const tokenizer = I18N.get('en-US' ).getTokenizer();
 
+import {serializePrediction} from '../../../lib/utils/thingtalk';
 import {
-    wikidataQuery,
     getItemLabel,
     argnameFromLabel,
 } from './utils';
@@ -106,17 +109,6 @@ class CsqaConverter {
         await util.promisify(fs.writeFile)(
             this._pathes[0], JSON.stringify(qaPairs, undefined, 2), 
             { encoding: 'utf8' });
-    }
-
-    async _splitLf(lf, sketch) {
-        for (const elem of lf) {
-            if (Array.isArray(elem)) {
-                sketch[0].push(elem[0]); // sketch of lf
-                sketch[1].push(elem[1]); // actual lf           
-            } else {
-                throw Error('Malformed logical form.');
-            }
-        }
     }
 
     async getArgName(qid, pid) {
@@ -298,29 +290,41 @@ class CsqaConverter {
             default:
                 throw new Error(`Unknown ques_type_id: ${user.ques_type_id}`);
         }
-        if (tk) {
-            return tk.prettyprint();
-        } 
+        return tk;
     }
 
     async _conveter(canonical, dialogs) {
         const dataset = [];
         const annotated = [];
         const skipped = [];
+        const error = [];
         for (const dialog of dialogs) {
             const user = dialog.user;
             const tk = await this.csqaToThingTalk(canonical, dialog);
 
             if (tk) {
-                dialog.tk = tk + ';';
-                dataset.push(`${dataset.length + 1}\t${user.utterance.toLowerCase()}\t${dialog.tk}`);
-                annotated.push(dialog);
+                try {
+                    const tokens = tokenizer.tokenize(tk.prettyprint());
+                    const tokenizedSentence = tokens.tokens.join(" ");
+                    let sentence = serializePrediction(tk, tokenizedSentence, tokens.entities, { locale: 'en-US' }).join(' ');
+                    for (const [key, value] of Object.entries(tokens.entities)) {
+                        sentence = sentence.replace(key, `" ${value} "`);
+                    }
+                    dialog.tk = sentence;
+                    const utterance = user.utterance.toLowerCase();
+                    dataset.push(`${dataset.length + 1}\t${utterance}\t${dialog.tk}`);
+                    annotated.push(dialog);
+                } catch (e) {
+                    // Mostly non-English alphabet
+                    error.push(dialog);
+                }
             } else {
                 skipped.push(dialog);
             }
         }
         console.log(`${annotated.length} sentences anntated in ${canonical}`);
         console.log(`${skipped.length} sentences skipped in ${canonical}`);
+        console.log(`${error.length} sentences thrown error in ${canonical}`);
         await util.promisify(fs.writeFile)(
             path.join(this._output_dir, canonical, `${this._dataset}.tsv`), dataset.join('\n'), 
             { encoding: 'utf8' });

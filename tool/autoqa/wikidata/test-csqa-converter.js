@@ -226,7 +226,7 @@ async function test(index) {
     });
     let dialog = TEST_CASES[index][0];
     let expected = TEST_CASES[index][1];
-    const generated = await csqaConverter.csqaToThingTalk('country', dialog);
+    const generated = await csqaConverter.csqaToThingTalk('country', dialog).prettyprint();
     assert.strictEqual(generated, expected);
 }
 
