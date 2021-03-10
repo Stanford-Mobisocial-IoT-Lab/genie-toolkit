@@ -312,7 +312,7 @@ class CsqaConverter {
             const tk = await this.csqaToThingTalk(canonical, dialog);
 
             if (tk) {
-                dialog.tk = tk;
+                dialog.tk = tk + ';';
                 dataset.push(`${dataset.length + 1}\t${user.utterance.toLowerCase()}\t${dialog.tk}`);
                 annotated.push(dialog);
             } else {
