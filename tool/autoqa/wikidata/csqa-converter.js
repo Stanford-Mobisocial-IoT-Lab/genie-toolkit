@@ -231,14 +231,18 @@ class CsqaConverter {
     async quantitativeQuestionsMultiEntity(canonical, activeSet, countQuesSubType, setOpChoice) {
         switch(countQuesSubType) {
             case 1: // Quantitative with Logical Operators
-                return new Ast.AggregationExpression(null, await this.setBasedQuestion(canonical, activeSet, setOpChoice), '*', 'count', null);
+                const exp = await this.setBasedQuestion(canonical, activeSet, setOpChoice);
+                if (!exp) return;
+                return new Ast.AggregationExpression(null, exp, '*', 'count', null);
             case 2: // Quantitative (count) multiple entity
                 if (activeSet[1] === activeSet[4]) {
                     const exp = await this.simpleQuestion(canonical, activeSet);
                     if (!exp) return;
                     return new Ast.AggregationExpression(null, exp, '*', 'count', null);
                 } else {
-                    return new Ast.AggregationExpression(null, await this.setBasedQuestion(canonical, activeSet, setOpChoice), '*', 'count', null);
+                    const exp = await this.setBasedQuestion(canonical, activeSet, setOpChoice);
+                    if (!exp) return;
+                    return new Ast.AggregationExpression(null, exp, '*', 'count', null);
                 }
             default:
                 throw new Error(`Unknown count_ques_sub_type: ${countQuesSubType}`);    
@@ -305,11 +309,11 @@ class CsqaConverter {
 
             if (tk) {
                 try {
-                    const preprocessed = tokenizer.tokenize(user.utterance).join(' ');
+                    const preprocessed = tokenizer.tokenize(user.utterance).tokens.join(' ');
                     const entities = makeDummyEntities(preprocessed);
                     const thingtalk = serializePrediction(tk, preprocessed, entities, { locale: 'en-US' }).join(' ');
                     dialog.tk = thingtalk;
-                    dataset.push(`${dataset.length + 1}\t${preprocessed}\t${thingtalk}`);
+                    dataset.push(`${dataset.length + 1}\t${preprocessed}\t${thingtalk} ;`);
                     annotated.push(dialog);
                 } catch (e) {
                     // Mostly non-English alphabet
