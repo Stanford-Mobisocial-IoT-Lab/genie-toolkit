@@ -21,26 +21,18 @@
 import * as fs from 'fs';
 import util from 'util';
 import assert from 'assert';
-import * as ThingTalk from 'thingtalk';
 import { Ast, Type } from 'thingtalk';
 
 import * as StreamUtils from '../../../lib/utils/stream-utils';
 import genBaseCanonical from '../lib/base-canonical-generator';
 import { clean } from '../../../lib/utils/misc-utils';
-import { cleanEnumValue, snakecase, titleCase, DEFAULT_ENTITIES } from '../lib/utils';
+import { snakecase, titleCase, DEFAULT_ENTITIES } from '../lib/utils';
 
 import {
-    wikidataQuery,
     getPropertyList,
     getItemLabel,
     getPropertyLabel,
     getPropertyAltLabels,
-    getValueTypeConstraint,
-    getOneOfConstraint,
-    getAllowedUnits,
-    getRangeConstraint,
-    getSchemaorgEquivalent,
-    getClasses,
     getType,
     getElementType,
     argnameFromLabel,
@@ -126,11 +118,10 @@ class SchemaProcessor {
             for (const dataset of paramDatasets.split('\n')) {
                 if (dataset === '') continue;
                 const data = dataset.split('\t');
-                if (data[0] == 'string') {
+                if (data[0] === 'string')
                     this._paramDatasets['string'].add(data[2]);
-                } else {
+                 else
                     this._paramDatasets['entity'].add(data[2]);
-                }
             }
         }
 
@@ -150,7 +141,7 @@ class SchemaProcessor {
             for (let property of properties) {
                 const label = await getPropertyLabel(property);
                 const name = argnameFromLabel(label);
-                const type = await getType(domain, domainLabel, property, label, this._schemaorgProperties, this._paramDatasets, true);
+                const type = await getType(domainLabel, property, label, this._schemaorgProperties);
                 const annotations = {
                     nl: { canonical: await this._getArgCanonical(property, label, type) },
                     impl: { wikidata_id: new Ast.Value.String(property) }

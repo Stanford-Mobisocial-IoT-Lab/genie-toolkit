@@ -17,54 +17,54 @@
 // limitations under the License.
 //
 // Author: Naoki Yamamura <yamamura@cs.stanford.edu>
-"use strict";
-
-const fs = require('fs');
-const fsExtra = require('fs-extra')
-const assert = require('assert');
-const util = require('util');
-const path = require('path');
-const os = require('os');
-
-const ThingTalk = require('thingtalk');
-const Type = ThingTalk.Type;
-
-const I18N = require('../../../lib/i18n');
-const StreamObject = require('stream-json/streamers/StreamObject');
-
-const INSTANCE_OF_PROP = "P31"
-
-const {
+import * as fs from 'fs';
+import * as fsExtra from 'fs-extra';
+import assert from 'assert';
+import * as util from 'util';
+import * as path from 'path';
+import * as os from 'os';
+import * as I18N from '../../../lib/i18n';
+import JSONStream from 'JSONStream';
+import {
     getType,
     getElementType,
     argnameFromLabel,
     loadSchemaOrgManifest
-} = require('./utils');
+} from './utils';
+
+const INSTANCE_OF_PROP = "P31";
 
 class ParamDatasetGenerator {
     constructor(options) {
         this._locale = options.locale;
-        this._domains = options.domains;
-        this._canonicals = options.canonicals;
+        this._domain = options.domain;
+        this._canonical = options.canonical;
         this._input_dir = options.inputDir;
         this._output_dir = options.outputDir;
         this._maxValueLength = options.maxValueLength;
         this._tokenizer = I18N.get(options.locale).getTokenizer();
         this._schemaorgManifest = options.schemaorgManifest;
         this._schemaorgProperties = {};
-        this._propery_pathes = [];
-        this._properties;
-        this._instances;
+        this._properties = {};
+        this._instances = new Set();
+        this._property_item_map_path = path.join(this._output_dir, this._canonical, 'property_item_map.json');
+        this._instance_file_path = path.join(this._output_dir, this._canonical, 'instances.txt');
+        this._property_value_map_path = path.join(this._output_dir, this._canonical, 'property_item_values.json');
+        this._instance_value_map_path = path.join(this._output_dir, this._canonical, 'instance_item_values.json');
     }
 
     async _readSync(func, dir) {
         return util.promisify(func)(dir, { encoding: 'utf8' });
     }
 
+    /**
+     * Generates paramter-datasets. Iterate through each domain properties.
+     * Find data type and value and output corresponding json/tsv files.
+     */
     async _processData(canonical) {
-        const domainProperties = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[0]));
+        const domainProperties = JSON.parse(await this. _readSync(fs.readFile, this._property_item_map_path));
         const propertyLabels = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
-        const itemLabels = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[3]));
+        const itemLabels = JSON.parse(await this. _readSync(fs.readFile, this._property_value_map_path));
         const outputDir = path.join(this._output_dir, canonical, 'parameter-datasets');
         const datasetPathes = new Set();
         const filteredDomainProperties = [];
@@ -79,26 +79,22 @@ class ParamDatasetGenerator {
             let fileId = `org.wikidata:${(await argnameFromLabel(label))}`;
             let isEntity = false;
 
-            // If we cannot map to some type, treat it as string
-            if (type) {
-                type = getElementType(type);
-                
-                if (type.isEntity) {
-                    const typeStr = type.toString();
-                    fileId = `${typeStr.substring(typeStr.lastIndexOf("Entity(") + 7, typeStr.indexOf(")"))}`;
-                    isEntity = true;
-                }  else if (type.isLocation) {
-                    fileId = 'tt:location';
-                    isEntity = true;
-                }  else if (type.isCurrency) {
-                    fileId = 'tt:currency_code';
-                    isEntity = true;
-                } else if (type.isString) {
-                    isEntity = false;
-                } else { // Enum, Date, Measure, Number
-                    filteredDomainProperties.push(property);
-                    continue;
-                }
+            type = getElementType(type);
+            if (type.isEntity) {
+                const typeStr = type.toString();
+                fileId = `${typeStr.substring(typeStr.lastIndexOf("Entity(") + 7, typeStr.indexOf(")"))}`;
+                isEntity = true;
+            }  else if (type.isLocation) {
+                fileId = 'tt:location';
+                isEntity = true;
+            }  else if (type.isCurrency) {
+                fileId = 'tt:currency_code';
+                isEntity = true;
+            } else if (type.isString) {
+                isEntity = false;
+            } else { // Enum, Date, Measure, Number
+                filteredDomainProperties.push(property);
+                continue;
             }
 
             // Set file path based on if string or entity
@@ -109,7 +105,10 @@ class ParamDatasetGenerator {
                 // Tokenizer throws error.
                 if (itemLabels[qid].includes('æ'))
                     continue;
-                
+                // tsv record length get's messed up and constants sampler throws error.
+                if (type.isString && itemLabels[qid].startsWith('"'))
+                    continue;
+
                 const tokens = this._tokenizer.tokenize(itemLabels[qid]).tokens;
                 // if some tokens are uppercase, they are entities, like NUMBER_0,
                 // in which case we ignore this value
@@ -134,11 +133,8 @@ class ParamDatasetGenerator {
                 }
             }
 
+            // Ignore if the property finds no valid value.
             if (data.length !== 0) {
-                if (!type) { // Print unmapped type.
-                    console.log(`'${property}': ${type}, // ${label}, found ${data.length} values`);
-                }
-                
                 filteredDomainProperties.push(property);
                 // Dump propety data
                 let dataPath;
@@ -160,116 +156,130 @@ class ParamDatasetGenerator {
             }
         }
             await Promise.all([
-                util.promisify(fs.writeFile)(this._propery_pathes[6],
+                util.promisify(fs.writeFile)(path.join(this._output_dir, this._canonical, 'parameter-datasets.tsv'),
                     Array.from(datasetPathes).join(''), { encoding: 'utf8' }),
-                util.promisify(fs.writeFile)(this._propery_pathes[5], 
+                util.promisify(fs.writeFile)(path.join(this._output_dir, this._canonical, 'properties.txt'), 
                     filteredDomainProperties.join(','), { encoding: 'utf8' })
             ]);    
         console.log(`${filteredDomainProperties.length} filtered properties in domain.`);  
     }
 
+    /**
+     * Iterate through items in property_item_map.json and map each item as { qid: label } (property_item_values.json).
+     * Also iterate through the domain instances and map each item as { qid: label } (instance_item_values.json).
+     */
     async _filterItemValues(canonical) {
-        if (!fs.existsSync(this._propery_pathes[0]) || !fs.existsSync(this._propery_pathes[2])) {
+        if (!fs.existsSync(this._property_item_map_path) || !fs.existsSync(this._instance_file_path)) 
             throw Error('Required file(s) missing.');
-        }
-        const properties = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[0]));
-        const instanceQids = new Set((await this. _readSync(fs.readFile, this._propery_pathes[2])).split(','));
 
-        let propertyQids = [];
-        for (const qids of Object.values(properties)) {
-            propertyQids = propertyQids.concat(qids);
-        }
-        propertyQids = new Set(propertyQids);
+        console.log(`Processing items_wikidata_n.json`);
+        const properties = JSON.parse(await this. _readSync(fs.readFile, this._property_item_map_path));
+        const instanceQids = new Set((await this. _readSync(fs.readFile, this._instance_file_path)).split(','));
         const propertyValues = {};
         const instanceValues = {};
 
-        console.log(`Processing items_wikidata_n.json`);
-        const pipeline = fs.createReadStream(path.join(this._input_dir, `items_wikidata_n.json`)).pipe(StreamObject.withParser());
-        pipeline.on('data', async data => {
+        let propertyQids = [];
+        // Get list of entities to find labels.
+        for (const qids of Object.values(properties)) 
+            propertyQids = propertyQids.concat(qids);
+        propertyQids = new Set(propertyQids);
+
+        const pipeline = fs.createReadStream(path.join(this._input_dir, `items_wikidata_n.json`)).pipe(JSONStream.parse('$*'));
+        pipeline.on('data', async (data) => {
             const key = String(data.key);
             const value = String(data.value);
 
-            if (instanceQids.has(key)) {
+            if (instanceQids.has(key))
                 instanceValues[key] = value;
-            }
-            if (propertyQids.has(key)) {
+
+            if (propertyQids.has(key))
                 propertyValues[key] = value;
-            }
         });
 
-        pipeline.on('error', error => console.error(error));
+        pipeline.on('error', (error) => console.error(error));
         pipeline.on('end', async () => {
             console.log(`Found ${Object.keys(propertyValues).length} items in domain property.`);
             await Promise.all([
-                util.promisify(fs.writeFile)(this._propery_pathes[3], 
+                util.promisify(fs.writeFile)(this._property_value_map_path, 
                     JSON.stringify(propertyValues), { encoding: 'utf8' }),
-                util.promisify(fs.writeFile)(this._propery_pathes[4], 
+                util.promisify(fs.writeFile)(this._instance_value_map_path, 
                     JSON.stringify(instanceValues), { encoding: 'utf8' })    
             ]);
             await this._processData(canonical);
         });
     }
 
+    /**
+     * Stream through CSQA { object: { pid: subject } json (comp_wikidata_rev.json). Check if the object is instance of the domain. 
+     * Appends the predicates and their subject as { pid: [subject qids] } to property_item_map.json.
+     */
     async _mapDomainRevProperties(canonical) {
-        if (!fs.existsSync(this._propery_pathes[0]) || !fs.existsSync(this._propery_pathes[2])) {
+        if (!fs.existsSync(this._property_item_map_path) || !fs.existsSync(this._instance_file_path)) 
             throw Error('Required file(s) missing.');
-        }
 
-        console.log('Processing comp_wikidata_rev.json')
-        const properties = JSON.parse(await this. _readSync(fs.readFile, this._propery_pathes[0]));
-        const instanceQids = new Set((await this. _readSync(fs.readFile, this._propery_pathes[2])).split(','));        
+        console.log('Processing comp_wikidata_rev.json');
+        const properties = JSON.parse(await this. _readSync(fs.readFile, this._property_item_map_path));
+        const instanceQids = new Set((await this. _readSync(fs.readFile, this._instance_file_path)).split(','));        
         const filteredProperties = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
-        const pipeline = fs.createReadStream(path.join(this._input_dir, `comp_wikidata_rev.json`)).pipe(StreamObject.withParser());
+        const pipeline = fs.createReadStream(path.join(this._input_dir, `comp_wikidata_rev.json`)).pipe(JSONStream.parse('$*'));
 
-        pipeline.on('data', async data => {
+        pipeline.on('data', async (data) => {
             if (instanceQids.has(data.key)) {
                 for (const [key, value] of Object.entries(data.value)) {
                     if (key in filteredProperties) {
-                        if (!(key in properties)) {
+                        if (!(key in properties))
                             properties[key] = [];
-                        }
+
                         properties[key] = Array.from(new Set(properties[key].concat(value)));
                     }
                 }
             }
         });
 
-        pipeline.on('error', error => console.error(error));
+        pipeline.on('error', (error) => console.error(error));
         pipeline.on('end', async () => {
             console.log(`Found ${instanceQids.size} instances in ${canonical} domain with ${Object.keys(properties).length} properties.`);
             await Promise.all([
-                util.promisify(fs.writeFile)(this._propery_pathes[0], 
+                util.promisify(fs.writeFile)(this._property_item_map_path, 
                     JSON.stringify(properties), { encoding: 'utf8' }),
-                util.promisify(fs.writeFile)(this._propery_pathes[1], 
+                util.promisify(fs.writeFile)( path.join(this._output_dir, this._canonical, 'properties_all.txt'), 
                     Object.keys(properties).join(','), { encoding: 'utf8' })
             ]);
             await this._filterItemValues(canonical);
         });
     }
 
+    /**
+     * Stream through CSQA { subject: { pid: object } json (wikidata_short_[1|2].json).
+     * Find an entity that is instance of the domain and output as comma separated string (instances.txt).
+     * Collects the predicates and their object as { pid: [object qids] } map (property_item_map.json).
+     */
     async _mapDomainProperties(domain, canonical, idx, mapReverse) {
         console.log(`Processing wikidata_short_${idx + 1}.json`);
         const filteredProperties = JSON.parse(await this. _readSync(fs.readFile, path.join(this._input_dir, 'filtered_property_wikidata4.json')));
-        const pipeline = fs.createReadStream(path.join(this._input_dir, `wikidata_short_${idx + 1}.json`)).pipe(StreamObject.withParser());
-        
-        pipeline.on('data', async data => {
+        const pipeline = fs.createReadStream(path.join(this._input_dir, `wikidata_short_${idx + 1}.json`)).pipe(JSONStream.parse('$*'));
+
+        pipeline.on('data', async (data) => {
             if (INSTANCE_OF_PROP in data.value) {
                 const entry = new Set(data.value[INSTANCE_OF_PROP]);
+                // Find an entity that is instance of the domain.
                 if (entry.has(domain)) {
                     for (const [key, value] of Object.entries(data.value)) {
+                        // Check if in filtered properties map.
                         if (key in filteredProperties) {
-                            if (!(key in this._properties)) {
+                            if (!(key in this._properties))
                                 this._properties[key] = [];
-                            }
+                            // Add to property as a key to property to item qid array map
                             this._properties[key] = Array.from(new Set(this._properties[key].concat(value)));
                         }
                     }
+                    // Add to list of domain instances.
                     this._instances.add(String(data.key));
                 }
             }
         });
 
-        pipeline.on('error', error => console.error(error));
+        pipeline.on('error', (error) => console.error(error));
         pipeline.on('end', async () => {
             // Stream another wikidata file if there is any left
             if (idx !== 0) {
@@ -277,9 +287,9 @@ class ParamDatasetGenerator {
             } else {
                 console.log(`Found ${this._instances.size} instances in ${canonical} domain with ${Object.keys(this._properties).length} properties.`);
                 await Promise.all([
-                    util.promisify(fs.writeFile)(this._propery_pathes[0], 
+                    util.promisify(fs.writeFile)(this._property_item_map_path, 
                         JSON.stringify(this._properties), { encoding: 'utf8' }),
-                    util.promisify(fs.writeFile)(this._propery_pathes[2], 
+                    util.promisify(fs.writeFile)(this._instance_file_path, 
                         Array.from(this._instances).join(','), { encoding: 'utf8' })    
                 ]);
                 
@@ -295,40 +305,25 @@ class ParamDatasetGenerator {
     async run() {
         // Required CSQA Wikidata json files
         assert(fs.existsSync(path.join(this._input_dir, 'filtered_property_wikidata4.json')));
-        assert(fs.existsSync(path.join(this._input_dir, `items_wikidata_n.json`)));
-        assert(fs.existsSync(path.join(this._input_dir, `wikidata_short_1.json`)));
-        assert(fs.existsSync(path.join(this._input_dir, `wikidata_short_2.json`)));
-        assert(fs.existsSync(path.join(this._input_dir, `comp_wikidata_rev.json`)));
+        assert(fs.existsSync(path.join(this._input_dir, 'items_wikidata_n.json')));
+        assert(fs.existsSync(path.join(this._input_dir, 'wikidata_short_1.json')));
+        assert(fs.existsSync(path.join(this._input_dir, 'wikidata_short_2.json')));
+        assert(fs.existsSync(path.join(this._input_dir, 'comp_wikidata_rev.json')));
 
+        // Set up
+        const outputDir = path.join(this._output_dir, this._canonical, 'parameter-datasets');
+        await util.promisify(fsExtra.emptyDir)(outputDir); // Clean up parameter-datasets
+        await util.promisify(fs.mkdir)(outputDir, { recursive: true });
         await loadSchemaOrgManifest(this._schemaorgManifest, this._schemaorgProperties);
-        for (const idx in this._domains) {
-            this._propery_pathes = [
-                path.join(this._output_dir, this._canonicals[idx], 'property_item_map.json'),
-                path.join(this._output_dir, this._canonicals[idx], 'properties_all.txt'),
-                path.join(this._output_dir, this._canonicals[idx], 'instances.txt'),
-                path.join(this._output_dir, this._canonicals[idx], 'property_item_values.json'),
-                path.join(this._output_dir, this._canonicals[idx], 'instance_item_values.json'),
-                path.join(this._output_dir, this._canonicals[idx], 'properties.txt'),
-                path.join(this._output_dir, this._canonicals[idx], 'parameter-datasets.tsv')
-            ];
-            // Set up
-            const outputDir = path.join(this._output_dir, this._canonicals[idx], 'parameter-datasets');
-            await util.promisify(fsExtra.emptyDir)(outputDir); // Clean up parameter-datasets
-            await util.promisify(fs.mkdir)(outputDir, { recursive: true });
 
-            // Process domain property map for the first time then process data.
-            if (!fs.existsSync(this._propery_pathes[0]) || 
-                !fs.existsSync(this._propery_pathes[1]) || 
-                !fs.existsSync(this._propery_pathes[2]) ||
-                !fs.existsSync(this._propery_pathes[3]) ||
-                !fs.existsSync(this._propery_pathes[4])) {
-                this._properties = {};
-                this._instances = new Set();    
-                await this._mapDomainProperties(this._domains[idx], this._canonicals[idx], 1, true);
-            } else {
-                await this._processData(this._canonicals[idx]);
-            }
-        }
+        // Process domain property map for the first time then process data.
+        if (!fs.existsSync(this._property_item_map_path) || 
+            !fs.existsSync(this._instance_file_path) ||
+            !fs.existsSync( this._property_value_map_path) ||
+            !fs.existsSync(this._instance_value_map_path))
+            await this._mapDomainProperties(this._domain, this._canonical, 1, true);
+         else
+            await this._processData(this._canonical);
     }
 }
 
@@ -340,23 +335,21 @@ module.exports = {
         });
         parser.add_argument('-o', '--output', {
             required: true,
-            help: ''
         });
         parser.add_argument('-i', '--input', {
             required: true,
-            help: ''
         });
         parser.add_argument('--locale', {
             required: false,
             default: 'en-US'
         });
-        parser.add_argument('--domains', {
+        parser.add_argument('--domain', {
             required: true,
-            help: 'domains (by item id) to process data, split by comma (no space)'
+            help: 'athedomain (by item id) to process data'
         });
-        parser.add_argument('--domain-canonicals', {
+        parser.add_argument('--domain-canonical', {
             required: true,
-            help: 'the canonical form for the given domains, used as the query names, split by comma (no space);'
+            help: 'the canonical form for the given domain, used as the query names'
         });
         parser.add_argument('--schemaorg-manifest', {
             required: false,
@@ -369,12 +362,10 @@ module.exports = {
     },
 
     async execute(args) {
-        const domains = args.domains.split(',');
-        const canonicals = args.domain_canonicals.split(',');
         const paramDatasetGenerator = new ParamDatasetGenerator({
             locale: args.locale,
-            domains: domains,
-            canonicals: canonicals,
+            domain: args.domain,
+            canonical: args.domain_canonical,
             inputDir: args.input,
             outputDir: args.output,
             schemaorgManifest:args.schemaorg_manifest,

@@ -18,19 +18,22 @@
 //
 // Author: Silei Xu <silei@cs.stanford.edu>
 
+import * as fs from 'fs';
+import util from 'util';
+import assert from 'assert';
 import * as Tp from 'thingpedia';
+import * as ThingTalk from 'thingtalk';
+import { cleanEnumValue, snakecase } from '../lib/utils';
 
-const URL = 'https://query.wikidata.org/sparql';
-const ThingTalk = require('thingtalk');
-const Type = ThingTalk.Type;
-
-const { cleanEnumValue, snakecase } = require('../lib/utils');
-const {
+import {
     PROPERTY_TYPE_OVERRIDE,
     PROPERTY_FORCE_ARRAY,
     PROPERTY_FORCE_NOT_ARRAY,
     PROPERTY_TYPE_SAME_AS_SUBJECT
-} = require('./manual-annotations');
+} from './manual-annotations';
+
+const URL = 'https://query.wikidata.org/sparql';
+const Type = ThingTalk.Type;
 
 const WikidataUnitToTTUnit = {
     // time
@@ -352,11 +355,11 @@ async function getEquivalent(id) {
     return result.map((r) => r.class.value.slice('http://www.wikidata.org/entity/'.length));
 }
 
-async function getType(domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault) {
+async function getType(domainLabel, property, propertyLabel, schemaorgProperties) {
     if (property in PROPERTY_TYPE_OVERRIDE)
         return PROPERTY_TYPE_OVERRIDE[property];
 
-    const elemType = await getElemType(domainLabel, property, propertyLabel, schemaorgProperties, paramDatasets, setDefault);
+    const elemType = await getElemType(domainLabel, property, propertyLabel, schemaorgProperties);
     if (elemType) {
         if (PROPERTY_FORCE_ARRAY.has(property))
             return new Type.Array(elemType);
@@ -368,9 +371,10 @@ async function getType(domainLabel, property, propertyLabel, schemaorgProperties
 
         return elemType;
     }
+    return Type.String;
 }
 
-async function getElemType(domainLabel, property, propertyLabel, schemaorgProperties, setDefault) {
+async function getElemType(domainLabel, property, propertyLabel, schemaorgProperties) {
     if (PROPERTY_TYPE_SAME_AS_SUBJECT.has(property))
         return new Type.Entity(`org.wikidata:${snakecase(domainLabel)}`);
 
@@ -448,7 +452,7 @@ async function getElemType(domainLabel, property, propertyLabel, schemaorgProper
 
     // load equivalent schema.org type if available
     const schemaorgEquivalent = await getSchemaorgEquivalent(property);
-    if (schemaorgEquivalent && schemaorgEquivalent in schemaorgProperties) {
+    if (schemaorgEquivalent && schemaorgProperties && schemaorgEquivalent in schemaorgProperties) {
         const schemaorgType = schemaorgProperties[schemaorgEquivalent];
         const schemaorgElemType = schemaorgType.isArray ? schemaorgType.elem : schemaorgType;
         if (schemaorgElemType.isEntity && schemaorgElemType.type.startsWith('org.schema')) {
@@ -460,10 +464,8 @@ async function getElemType(domainLabel, property, propertyLabel, schemaorgProper
             return schemaorgType;
     }
 
-    if (setDefault) {
-        // majority or arrays of string so this may be better default.
-        return Type.String;
-    }
+    // majority or arrays of string so this may be better default.
+    return Type.String;
 }
 
 function argnameFromLabel(label) {
@@ -471,7 +473,7 @@ function argnameFromLabel(label) {
         .replace(/'/g, '') // remove apostrophe
         .replace(/,/g, '') // remove comma
         .replace(/_\/_/g, '_or_') // replace slash by or
-        .replace('/[(|)]/g', '') // replace parentheses
+        .replace(/[(|)]/g, '') // replace parentheses
         .replace(/-/g, '_') // replace -
         .replace(/\s/g, '_') // replace whitespace
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove accent

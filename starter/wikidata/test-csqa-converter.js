@@ -17,12 +17,10 @@
 // limitations under the License.
 //
 // Author: Naoki Yamamura <yamamura@cs.stanford.edu>
-"use strict";
+
 import assert from 'assert';
 
-import {
-    CsqaConverter,
-} from './csqa-converter';
+import { CsqaConverter } from '../../tool/autoqa/wikidata/csqa-converter';
 
 const INSTANCES = new Set(['Q16', 'Q27', 'Q30', 'Q38', 'Q142', 'Q145', 'Q159', 'Q183', ' Q230', 'Q403', 'Q414', 'Q869', 'Q916']);
 const PROPERTY_LABELS = {
@@ -107,7 +105,7 @@ const TEST_CASES = [
           utterance: 'Malaysia, Myanmar, Cambodia, Palazzolo sull\'Oglio, Chiari, Urago d\'Oglio, Laos, Cividate al Piano, Palosco',
           active_set: [ 'OR((Q869,P47,c(Q15617994)), (Q111466,P47,c(Q15617994)))' ],
     }},
-    '[shares_border_with] of @org.wikidata.country() filter id =~ "thailand" || shares_border_with =~ "pontoglio"'],
+    '[shares_border_with] of @org.wikidata.country() filter id =~ "thailand" || shares_border_with == "pontoglio"^^org.wikidata:country("pontoglio")'],
     // Test 5: 4.1. Set-based question OR
     [{  user: {
             set_op_choice: 1,
@@ -117,7 +115,7 @@ const TEST_CASES = [
         system: {
             utterance: 'Australia, Canada, Germany, Denmark',
             active_set: [ 'OR((Q30,P530,c(Q1048835)), (Q12318599,P27,c(Q1048835)))' ]}},
-    '[diplomatic_relation, country_of_citizenship] of @org.wikidata.country() filter id =~ "united states of america " || country_of_citizenship =~ "isabelle brockenhuus-løwenhielm"'],
+    '[diplomatic_relation, country_of_citizenship] of @org.wikidata.country() filter id =~ "united states of america " || country_of_citizenship == "isabelle brockenhuus-løwenhielm"^^org.wikidata:country("isabelle brockenhuus-løwenhielm")'],
     // Test 6: 4.2. Set-based question AND
     [{  user: {
             set_op_choice: 2,
@@ -128,7 +126,7 @@ const TEST_CASES = [
             utterance: 'Kingdom of the Netherlands',
             active_set: [ 'AND((Q142,P47,c(Q15617994)), (Q360469,P27,c(Q15617994)))' ],
     }},
-    '[shares_border_with, country_of_citizenship] of @org.wikidata.country() filter id =~ "france" && country_of_citizenship =~ "charles iii, duke of parma"'],
+    '[shares_border_with, country_of_citizenship] of @org.wikidata.country() filter id =~ "france" && country_of_citizenship == "charles iii, duke of parma"^^org.wikidata:country("charles iii, duke of parma")'],
     // Test 7: 4.2. Set-based question AND
     [{  user: {
             set_op_choice: 2,
@@ -161,7 +159,7 @@ const TEST_CASES = [
             utterance: 'Some of them are Venezuela, Italy, Zambia, Turkey, Argentina, Vietnam, Mongolia, United States of America, Brazil, India',
             active_set: [ 'AND((Q159,P530,c(Q15617994)), NOT((Q11103562,P17,c(Q15617994))))' ],
     }},
-    '[diplomatic_relation, country] of @org.wikidata.country() filter id =~ "russia" && !(country =~ "higashine interchange")'],
+    '[diplomatic_relation, country] of @org.wikidata.country() filter id =~ "russia" && !(country == "higashine interchange"^^org.wikidata:country("higashine interchange"))'],
     // Test 10: 7.1. Comparative and Quantitative questions (involving single entity), Quantitative (count) single entity
     [{  user: {
             ques_type_id: 7,
@@ -218,15 +216,16 @@ const TEST_CASES = [
 
 async function test(index) {
     const csqaConverter = new CsqaConverter({
-        domains: 'Q6256',
-        canonicals: 'country',
+        domain: 'Q6256',
+        canonical: 'country',
+        outputDir: '.',
         instances: INSTANCES,
         propertyLabels: PROPERTY_LABELS,
         entityLabels: ENTITY_LABELS
     });
     let dialog = TEST_CASES[index][0];
     let expected = TEST_CASES[index][1];
-    const generated = await csqaConverter.csqaToThingTalk('country', dialog).prettyprint();
+    const generated = (await csqaConverter.csqaToThingTalk('country', dialog)).prettyprint();
     assert.strictEqual(generated, expected);
 }
 
