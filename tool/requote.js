@@ -396,7 +396,7 @@ function requoteSentence(id, context, sentence, program, mode, requote_numbers, 
     let contextEntities = new Set;
     if (context) {
         for (let token of context.split(' ')) {
-            if (/^[A-Z]/.test(token))
+            if (/^[A-Z].*_[0-9|۰-۹]/.test(token)) // match strings like QUOTED_STRING_0, NUMBER_0 and GENERIC_ENTITY_uk.ac.cam.multiwoz.Hotel:Hotel_0
                 contextEntities.add(token);
         }
     }
